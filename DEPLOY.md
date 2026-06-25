@@ -27,6 +27,24 @@ Settings → Environment Variables**, WITHOUT the `VITE_` prefix:
 `SUPABASE_SERVICE_ROLE_KEY`, `BASE44_SERVICE_TOKEN` / `BASE44_TOKEN_<APPID>`,
 `MERCADOPAGO_ACCESS_TOKEN`, `INGEST_HMAC_SECRET`.
 
+## Fase 1 — license sync (`/api/cron/sync-licenses`)
+
+Runs daily (see `vercel.json` cron) and on demand. For each Base44 app it reads
+the license entity and upserts normalized `tenants` + `licenses` into the bodega.
+It needs these **server-only** env vars in Vercel (no `VITE_` prefix):
+
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — service-role writes to the bodega.
+- A Base44 token per app **or** one shared token:
+  - `BASE44_TOKEN_<APPID_UPPER>` (e.g. `BASE44_TOKEN_696E7FDD7889892FE40868B7` for Puntos+), or
+  - `BASE44_SERVICE_TOKEN` as a fallback for all apps.
+  Apps without a token are skipped (the response lists them).
+- `CRON_SECRET` (optional) — if set, the endpoint requires `Authorization: Bearer <CRON_SECRET>`; Vercel cron sends it automatically.
+
+Field maps (which app field → which bodega column) live in `apps.config.field_map`
+(migration `0004`), verified against each repo's `base44/entities/*.jsonc`.
+
+Run on demand: `curl -H "Authorization: Bearer $CRON_SECRET" https://control.acaciaco.com.mx/api/cron/sync-licenses`
+
 ## Custom domain
 
 In Vercel → Project → Settings → Domains, add `control.acaciaco.com.mx`

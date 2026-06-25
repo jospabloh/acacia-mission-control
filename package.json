@@ -9,9 +9,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
+    "test": "node --test",
     "onboard:base44": "node scripts/onboard-base44.js"
   },
   "dependencies": {
+    "@base44/sdk": "^0.8.34",
     "@supabase/supabase-js": "^2.45.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
