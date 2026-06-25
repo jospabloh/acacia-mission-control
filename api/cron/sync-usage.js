@@ -1,8 +1,9 @@
 // Cron: pull product-usage counts from each Base44 app (via the acaciaControl
 // bridge → usage.summary) and store today's snapshot in usage_daily. Idempotent
-// per day (delete + insert the app's portfolio-level rows for today).
+// per day. Per-app logic lives in _lib/sync/syncUsage.js (shared with control).
 import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
+import { bridgeConfigured } from '../_lib/appBridge.js'
+import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
 
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET
@@ -20,27 +21,9 @@ export default async function handler(req, res) {
 
   const day = new Date().toISOString().slice(0, 10)
   const summary = []
-
   for (const app of apps) {
-    const entities = app.config?.usage_entities ?? []
-    if (entities.length === 0) { summary.push({ app: app.id, skipped: 'no usage_entities' }); continue }
-    try {
-      const out = await callBridge(app, 'usage.summary', { entities })
-      const counts = out?.counts ?? out?.data?.counts ?? {}
-      const rows = Object.entries(counts)
-        .filter(([, v]) => v != null)
-        .map(([metric, value]) => ({ app_id: app.id, tenant_id: null, day, metric, value: Number(value) || 0 }))
-
-      // Idempotent for the day: replace this app's portfolio-level rows.
-      await supabaseAdmin.from('usage_daily').delete().eq('app_id', app.id).eq('day', day).is('tenant_id', null)
-      if (rows.length) {
-        const { error: uErr } = await supabaseAdmin.from('usage_daily').insert(rows)
-        if (uErr) throw new Error(uErr.message)
-      }
-      summary.push({ app: app.id, metrics: rows.length })
-    } catch (e) {
-      summary.push({ app: app.id, error: e.message })
-    }
+    try { summary.push(await syncUsageForApp(app, day)) }
+    catch (e) { summary.push({ app: app.id, error: e.message }) }
   }
 
   await audit('sync-usage', { payload: { day, summary } })

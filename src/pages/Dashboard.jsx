@@ -8,27 +8,26 @@ import { Icon } from '../components/icons.jsx'
 const BACKEND_LABEL = { base44: 'Base44', supabase: 'Supabase', external: 'Externo', static: 'Estático' }
 
 const SECTIONS = [
-  { key: 'app',      label: 'Apps · SaaS',  sub: 'Operadas por Mission Control' },
-  { key: 'freeware', label: 'Freeware',     sub: 'Herramientas gratuitas' },
-  { key: 'site',     label: 'Sitios web',   sub: 'Páginas y micrositios' },
+  { key: 'app',      label: 'Apps · SaaS',  sub: 'Control y analíticas en vivo' },
+  { key: 'freeware', label: 'Freeware',     sub: 'Catálogo · herramientas gratuitas' },
+  { key: 'site',     label: 'Sitios web',   sub: 'Catálogo · páginas y micrositios' },
 ]
 
-// open-in-new-tab affordance shared by every actionable tile
-function OpenIcon() {
-  return <Icon name="external" size={14} className="text-ink-faint transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand" />
-}
-
-// SaaS app: instrumented — live status, synced stats, opens the app + a detail door.
+// SaaS app: a control panel door — live status + synced stats. The whole card
+// opens the in-app control + analytics view (NOT the live app). A tiny "abrir ↗"
+// is the only escape hatch to the running app.
 function AppCard({ app, stat }) {
   return (
-    <div className="rounded-xl border border-hair bg-paper-card hover:border-brand/40 hover:shadow-card transition">
-      <a href={app.url} target="_blank" rel="noreferrer" className="group block p-5">
-        <div className="flex items-center justify-between">
+    <div className="group relative rounded-xl border border-hair bg-paper-card hover:border-brand/40 hover:shadow-card transition">
+      <a href={app.url} target="_blank" rel="noreferrer" title="Abrir la app"
+        onClick={(e) => e.stopPropagation()}
+        className="absolute right-4 top-4 z-10 text-ink-faint hover:text-brand">
+        <Icon name="external" size={14} />
+      </a>
+      <Link to={`/apps/${app.id}`} className="block p-5">
+        <div className="flex items-center gap-2 pr-6">
+          <span className={`h-2.5 w-2.5 rounded-full ${app.status === 'active' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
           <span className="font-display font-semibold text-ink">{app.name}</span>
-          <span className="inline-flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${app.status === 'active' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-            <OpenIcon />
-          </span>
         </div>
         <div className="mt-3 flex items-center gap-4 text-sm">
           <span className="text-ink"><span className="font-display font-semibold">{stat?.tenants ?? 0}</span> <span className="text-ink-mute">tenants</span></span>
@@ -36,23 +35,21 @@ function AppCard({ app, stat }) {
           <span className="text-ink"><span className="font-display font-semibold">{stat?.active ?? 0}</span><span className="text-ink-faint">/{stat?.licenses ?? 0}</span> <span className="text-ink-mute">licencias</span></span>
         </div>
         <div className="mt-2 text-xs text-ink-faint">{BACKEND_LABEL[app.backend] ?? app.backend}</div>
-      </a>
-      <div className="px-5 py-2.5 border-t border-hair">
-        <Link to={`/apps/${app.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-deep">
-          Ver detalle <span aria-hidden="true">→</span>
-        </Link>
-      </div>
+        <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand group-hover:text-brand-deep">
+          Control y analíticas <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
+        </div>
+      </Link>
     </div>
   )
 }
 
-// Freeware/site: a launch tile — one job, opens the real thing.
+// Freeware/site: inventory, not operated by Mission Control — just a link out.
 function LaunchTile({ app }) {
   return (
     <a href={app.url} target="_blank" rel="noreferrer"
       className="group flex items-center justify-between gap-2 rounded-lg border border-hair bg-paper-card px-4 py-3 hover:border-brand/40 hover:bg-white transition">
       <span className="text-sm font-medium text-ink truncate">{app.name}</span>
-      <OpenIcon />
+      <Icon name="external" size={14} className="text-ink-faint transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand" />
     </a>
   )
 }
@@ -91,7 +88,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <PageHeader title="Portafolio" subtitle="Todo lo que opera ACACIA — un clic abre cada cosa." />
+      <PageHeader title="Portafolio" subtitle="Control y analíticas de todo lo que opera ACACIA — un clic entra al panel de cada app." />
 
       {error && <p className="mb-4 text-sm text-red-600">No se pudo leer el registro: {error}</p>}
 
