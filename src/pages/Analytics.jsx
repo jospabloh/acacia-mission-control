@@ -36,7 +36,7 @@ export function Analytics() {
   useEffect(() => {
     Promise.all([
       fetchApps(),
-      supabase.from('licenses').select('app_id, status, plan'),
+      supabase.from('licenses').select('app_id, status, plan, seats, trial_ends_at, current_period_end'),
       supabase.from('tenants').select('app_id'),
     ]).then(([apps, l, t]) => {
       if (l.error) throw l.error
@@ -57,13 +57,33 @@ export function Analytics() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Licencias" value={t.licenses} hint={`${t.tenants} tenants`} />
         <StatCard label="Activas" value={t.active} accent hint={`${t.activeRate}% del total`} />
-        <StatCard label="En prueba" value={t.trial} hint="trials abiertos" />
-        <StatCard label="Solo lectura" value={t.view_only} hint="por reactivar" />
+        <StatCard label="En prueba" value={t.trial} hint={`${data.trialsEnding14} por vencer ≤14d`} />
+        <StatCard label="Asientos" value={t.seats} hint={`${data.renewals30} renovaciones ≤30d`} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Bars title="Licencias por estado" rows={data.byStatus} total={t.licenses} colorFor={(k) => STATUS_BAR[k] ?? 'bg-brand'} />
         <Bars title="Licencias por plan" rows={data.byPlan} total={t.licenses} />
+      </div>
+
+      <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
+        <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Vencimientos próximos</h3>
+        <p className="mt-1 text-xs text-ink-faint">Renovaciones y fines de prueba en los próximos 45 días.</p>
+        <div className="mt-4 space-y-2">
+          {data.upcoming.length === 0 && <p className="text-sm text-ink-faint">Nada por vencer pronto. 🎉</p>}
+          {data.upcoming.slice(0, 8).map((u, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`h-1.5 w-1.5 rounded-full ${u.type === 'fin de prueba' ? 'bg-amber-400' : 'bg-brand'}`} />
+                <span className="font-medium text-ink truncate">{u.name}</span>
+                <span className="text-ink-mute">· {u.type}</span>
+              </span>
+              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
+                {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="mt-6 rounded-xl border border-hair bg-paper-card overflow-hidden">

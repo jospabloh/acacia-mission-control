@@ -16,10 +16,19 @@ function bucket(status) {
   return 'other'
 }
 
-export function summarizePortfolio({ licenses = [], tenants = [], apps = [] }) {
+const DAY = 24 * 60 * 60 * 1000
+
+function daysUntil(dateStr, now) {
+  if (!dateStr) return null
+  const t = Date.parse(dateStr)
+  return Number.isNaN(t) ? null : Math.ceil((t - now) / DAY)
+}
+
+export function summarizePortfolio({ licenses = [], tenants = [], apps = [], now = Date.now() }) {
   const appName = Object.fromEntries(apps.map((a) => [a.id, a.name]))
 
-  const totals = { licenses: licenses.length, tenants: tenants.length, active: 0, trial: 0, view_only: 0, other: 0 }
+  const totals = { licenses: licenses.length, tenants: tenants.length, active: 0, trial: 0, view_only: 0, other: 0, seats: 0 }
+  const upcoming = [] // renewals + trial ends within the horizon
   const byStatus = {}
   const byPlan = {}
   const byApp = {}
@@ -32,11 +41,24 @@ export function summarizePortfolio({ licenses = [], tenants = [], apps = [] }) {
     byStatus[status] = (byStatus[status] ?? 0) + 1
     byPlan[plan] = (byPlan[plan] ?? 0) + 1
     totals[bucket(l.status)]++
+    totals.seats += Number(l.seats) || 0
     const row = appRow(l.app_id)
     row.licenses++
     if (l.status === 'active') row.active++
+
+    // Renewals (paid period ending) and trials ending, within 45 days.
+    const dRenew = daysUntil(l.current_period_end, now)
+    if (dRenew !== null && dRenew >= 0 && dRenew <= 45) {
+      upcoming.push({ app_id: l.app_id, name: appName[l.app_id] ?? l.app_id, type: 'renovación', in_days: dRenew, date: l.current_period_end })
+    }
+    const dTrial = daysUntil(l.trial_ends_at, now)
+    if (dTrial !== null && dTrial >= 0 && dTrial <= 45) {
+      upcoming.push({ app_id: l.app_id, name: appName[l.app_id] ?? l.app_id, type: 'fin de prueba', in_days: dTrial, date: l.trial_ends_at })
+    }
   }
   for (const t of tenants) appRow(t.app_id).tenants++
+
+  upcoming.sort((a, b) => a.in_days - b.in_days)
 
   // Conversion: how much of the base is actually paying (active vs everything).
   const activeRate = totals.licenses ? Math.round((totals.active / totals.licenses) * 100) : 0
@@ -46,5 +68,8 @@ export function summarizePortfolio({ licenses = [], tenants = [], apps = [] }) {
     byStatus: toSortedEntries(byStatus),
     byPlan: toSortedEntries(byPlan),
     byApp: Object.values(byApp).sort((a, b) => b.tenants - a.tenants || b.licenses - a.licenses),
+    upcoming,
+    renewals30: upcoming.filter((u) => u.type === 'renovación' && u.in_days <= 30).length,
+    trialsEnding14: upcoming.filter((u) => u.type === 'fin de prueba' && u.in_days <= 14).length,
   }
 }
