@@ -31,6 +31,7 @@ function Bars({ title, rows, total, colorFor }) {
 
 export function Analytics() {
   const [data, setData] = useState(null)
+  const [usage, setUsage] = useState(null) // { day, byApp: {app_id: {name, metrics:[{metric,value}]}} }
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -40,7 +41,21 @@ export function Analytics() {
       supabase.from('tenants').select('app_id'),
     ]).then(([apps, l, t]) => {
       if (l.error) throw l.error
+      const appName = Object.fromEntries(apps.map((a) => [a.id, a.name]))
       setData(summarizePortfolio({ apps, licenses: l.data ?? [], tenants: t.data ?? [] }))
+
+      // Product usage: latest day's snapshot from usage_daily.
+      supabase.from('usage_daily').select('app_id, metric, value, day').is('tenant_id', null)
+        .order('day', { ascending: false }).limit(500)
+        .then(({ data: u }) => {
+          if (!u?.length) { setUsage({ day: null, byApp: {} }); return }
+          const day = u[0].day
+          const byApp = {}
+          for (const r of u.filter((x) => x.day === day)) {
+            (byApp[r.app_id] ??= { name: appName[r.app_id] ?? r.app_id, metrics: [] }).metrics.push({ metric: r.metric, value: r.value })
+          }
+          setUsage({ day, byApp })
+        })
     }).catch((e) => setError(e.message))
   }, [])
 
@@ -110,8 +125,37 @@ export function Analytics() {
         </table>
       </div>
 
+      <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
+        <div className="flex items-baseline justify-between">
+          <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Uso de producto</h3>
+          {usage?.day && <span className="text-xs text-ink-faint">snapshot {usage.day}</span>}
+        </div>
+        {usage && Object.keys(usage.byApp).length > 0 ? (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {Object.entries(usage.byApp).map(([id, a]) => (
+              <div key={id} className="rounded-lg border border-hair p-4">
+                <div className="font-medium text-ink">{a.name}</div>
+                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
+                  {a.metrics.map((m) => (
+                    <span key={m.metric} className="text-sm">
+                      <span className="font-display font-semibold text-ink">{m.value.toLocaleString('es-MX')}</span>
+                      <span className="ml-1 text-ink-mute">{m.metric}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-ink-faint">
+            Sin snapshot aún. Corre el cron <code className="font-mono text-ink">sync-usage</code> (necesita
+            la función <code className="font-mono text-ink">acaciaControl</code> con <code className="font-mono text-ink">usage.summary</code> desplegada en cada app).
+          </p>
+        )}
+      </div>
+
       <p className="mt-6 text-xs text-ink-faint">
-        Próximas capas de insights: tráfico web (PostHog), costos de infraestructura por app, y consumo de IA.
+        Próximas capas: tráfico web (PostHog), costos de infraestructura por app.
       </p>
     </div>
   )
