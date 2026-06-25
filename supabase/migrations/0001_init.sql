@@ -13,6 +13,16 @@
 
 create extension if not exists "pgcrypto";
 
+-- ─── members: Mission Control operators ─────────────────────────────────────
+-- Defined first: the role-helper SQL functions below reference this table, and
+-- SQL-language functions are validated against existing relations at creation.
+create table public.members (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  email      text not null,
+  role       text not null default 'viewer' check (role in ('owner','admin','viewer')),
+  created_at timestamptz not null default now()
+);
+
 -- ─── Role helpers ───────────────────────────────────────────────────────────
 -- A Mission Control operator's role, derived from the `members` table. Returns
 -- NULL for an authenticated user who is not a member (→ no access under RLS).
@@ -42,14 +52,6 @@ as $$
        when 'owner' then 3 when 'admin' then 2 when 'viewer' then 1 else 99 end),
     false)
 $$;
-
--- ─── members: Mission Control operators ─────────────────────────────────────
-create table public.members (
-  user_id    uuid primary key references auth.users(id) on delete cascade,
-  email      text not null,
-  role       text not null default 'viewer' check (role in ('owner','admin','viewer')),
-  created_at timestamptz not null default now()
-);
 
 -- ─── apps: registry = source of truth for "what apps exist" ─────────────────
 create table public.apps (
