@@ -76,7 +76,11 @@ export function LoginGate({ children }) {
     return (
       <div className="console-bg min-h-screen grid place-items-center px-4">
         <div className="rise w-full max-w-md rounded-2xl bg-paper-card border border-hair shadow-card p-8 text-center">
-          <img src="/mc-mark.svg" alt="ACACIA Mission Control" className="mx-auto h-14 w-14" />
+          <div className="flex items-center justify-center gap-3">
+            <img src="/brand/acacia-logo.jpg" alt="ACACIA" className="h-12 w-auto" />
+            <span className="h-9 w-px bg-hair" />
+            <img src="/mc-mark.svg" alt="Mission Control" className="h-9 w-9" />
+          </div>
           <h1 className="mt-5 font-display text-lg font-semibold text-ink">Cuenta sin acceso</h1>
           <p className="mt-2 text-sm text-ink-soft">
             <span className="font-medium text-ink">{user.email}</span> no está autorizada como operador
@@ -133,12 +137,16 @@ export function LoginGate({ children }) {
           </div>
 
           <div className="px-7 pt-8 pb-7">
+            {/* co-brand: ACACIA (house brand) · Mission Control (product, own mark) */}
             <div className="flex items-center gap-3">
-              <img src="/mc-mark.svg" alt="" className="h-11 w-11" />
-              <div className="leading-none">
-                <div className="font-display text-xl font-semibold text-ink tracking-tight">ACACIA</div>
-                <div className="mt-1 text-xs tracking-wide text-ink-mute">Mission Control</div>
-              </div>
+              <img src="/brand/acacia-logo.jpg" alt="ACACIA Consultoría" className="h-12 w-auto" />
+              <span className="h-9 w-px bg-hair" />
+              <span className="flex items-center gap-2">
+                <img src="/mc-mark.svg" alt="" className="h-7 w-7" />
+                <span className="font-display text-sm font-semibold tracking-wide text-ink leading-tight">
+                  Mission<br />Control
+                </span>
+              </span>
             </div>
             <h1 className="mt-7 font-display text-2xl font-semibold text-ink tracking-tight">
               Acceso de operador

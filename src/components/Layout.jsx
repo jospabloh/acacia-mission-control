@@ -8,11 +8,11 @@ export function Layout() {
     <div className="min-h-screen bg-acacia-50 text-acacia-900">
       <div className="flex">
         <aside className="w-60 shrink-0 border-r bg-white min-h-screen p-4 flex flex-col">
-          <div className="px-3 pb-4 flex items-center gap-2.5">
-            <img src="/mc-mark.svg" alt="" className="h-8 w-8" />
-            <div className="leading-none">
-              <div className="font-semibold">ACACIA</div>
-              <div className="text-xs text-acacia-500 mt-0.5">Mission Control</div>
+          <div className="px-3 pb-4">
+            <img src="/brand/acacia-logo.jpg" alt="ACACIA" className="h-9 w-auto" />
+            <div className="mt-2 flex items-center gap-1.5">
+              <img src="/mc-mark.svg" alt="" className="h-4 w-4" />
+              <span className="text-[11px] font-semibold tracking-wide text-acacia-500">MISSION CONTROL</span>
             </div>
           </div>
           <Nav />
