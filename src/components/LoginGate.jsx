@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth/useAuth.js'
 
+// Google sign-in is only shown once the provider is actually configured in
+// Supabase (Auth → Providers → Google) + a Google Cloud OAuth client exists.
+// Flip VITE_GOOGLE_OAUTH=on (then redeploy) to reveal the button. Off by
+// default so production never shows a button that can't complete.
+const GOOGLE_ENABLED = import.meta.env.VITE_GOOGLE_OAUTH === 'on'
+
 // The portfolio this console operates — its real marks double as the page's
 // signature: ACACIA Mission Control is the control room for these systems.
 const SYSTEMS = [
@@ -70,7 +76,7 @@ export function LoginGate({ children }) {
     return (
       <div className="console-bg min-h-screen grid place-items-center px-4">
         <div className="rise w-full max-w-md rounded-2xl bg-paper-card border border-hair shadow-card p-8 text-center">
-          <img src="/brand/acacia-logo.jpg" alt="ACACIA" className="mx-auto h-14 w-auto rounded-lg" />
+          <img src="/mc-mark.svg" alt="ACACIA Mission Control" className="mx-auto h-14 w-14" />
           <h1 className="mt-5 font-display text-lg font-semibold text-ink">Cuenta sin acceso</h1>
           <p className="mt-2 text-sm text-ink-soft">
             <span className="font-medium text-ink">{user.email}</span> no está autorizada como operador
@@ -127,27 +133,37 @@ export function LoginGate({ children }) {
           </div>
 
           <div className="px-7 pt-8 pb-7">
-            <img src="/brand/acacia-logo.jpg" alt="ACACIA Consultoría" className="h-16 w-auto rounded-lg" />
-            <h1 className="mt-5 font-display text-2xl font-semibold text-ink tracking-tight">
+            <div className="flex items-center gap-3">
+              <img src="/mc-mark.svg" alt="" className="h-11 w-11" />
+              <div className="leading-none">
+                <div className="font-display text-xl font-semibold text-ink tracking-tight">ACACIA</div>
+                <div className="mt-1 text-xs tracking-wide text-ink-mute">Mission Control</div>
+              </div>
+            </div>
+            <h1 className="mt-7 font-display text-2xl font-semibold text-ink tracking-tight">
               Acceso de operador
             </h1>
             <p className="mt-1 text-sm text-ink-soft">
               Centro de control del portafolio ACACIA.
             </p>
 
-            {/* Google — primary path */}
-            <button onClick={onGoogle} disabled={googleBusy || busy}
-              className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
-              {googleBusy
-                ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
-                : <><GoogleMark /> Continuar con Google</>}
-            </button>
+            {/* Google — primary path (shown only when the provider is configured) */}
+            {GOOGLE_ENABLED && (
+              <>
+                <button onClick={onGoogle} disabled={googleBusy || busy}
+                  className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
+                  {googleBusy
+                    ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
+                    : <><GoogleMark /> Continuar con Google</>}
+                </button>
 
-            <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-faint">
-              <span className="h-px flex-1 bg-hair" /> o con tu correo <span className="h-px flex-1 bg-hair" />
-            </div>
+                <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-faint">
+                  <span className="h-px flex-1 bg-hair" /> o con tu correo <span className="h-px flex-1 bg-hair" />
+                </div>
+              </>
+            )}
 
-            <form onSubmit={onSubmit} className="space-y-3">
+            <form onSubmit={onSubmit} className={`space-y-3 ${GOOGLE_ENABLED ? '' : 'mt-6'}`}>
               <label className="block">
                 <span className="text-xs font-medium text-ink-soft">Correo</span>
                 <input type="email" value={email} required autoComplete="email"

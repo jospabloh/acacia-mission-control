@@ -8,6 +8,14 @@ export default {
         sans: ["'DM Sans'", 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Neutral slate scale used by the inner app (layout, nav, pages).
+        acacia: {
+          50: '#f4f6f8',
+          100: '#e7ebf0',
+          500: '#5b6b7b',
+          700: '#37424d',
+          900: '#1b2128',
+        },
         // ACACIA brand (from acaciaco.com.mx)
         ink: {
           DEFAULT: '#0e0d14',
