@@ -19,3 +19,8 @@ async function postControl(path, body) {
 export function runSync(appId, kinds = ['licenses', 'usage']) {
   return postControl('/api/control/run-sync', { appId, kinds })
 }
+
+// Read follow-up email history for one tenant (read-only; no email is sent).
+export function emailStatus(appId, tenantExternalId) {
+  return postControl('/api/control/email-status', { appId, tenantExternalId })
+}

@@ -3,13 +3,36 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
-import { runSync } from '../lib/control.js'
+import { runSync, emailStatus } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { Icon } from '../components/icons.jsx'
 
 const STATUS_LABEL = { active: 'Activas', trial: 'En prueba', view_only: 'Solo lectura', past_due: 'Vencidas', canceled: 'Canceladas', desconocido: 'Sin estado' }
 const STATUS_BAR = { active: 'bg-emerald-500', trial: 'bg-brand', view_only: 'bg-amber-400', past_due: 'bg-red-400', canceled: 'bg-ink-faint', desconocido: 'bg-ink-faint' }
 const BACKEND_LABEL = { base44: 'Base44', supabase: 'Supabase', external: 'Externo', static: 'Estático' }
+
+// A follow-up reminder is any sent email about renewal / expiry / trial ending.
+const FOLLOWUP_RE = /renewal|expiry|expir|trial|reminder|vencim|renov/i
+
+function daysUntil(iso, now) {
+  if (!iso) return null
+  const d = Math.ceil((new Date(iso).getTime() - now) / 86_400_000)
+  return Number.isFinite(d) ? d : null
+}
+
+// Build a tenant-aware list of upcoming renewals / trial-ends from raw licenses.
+function buildVencimientos(licenses, tenantById, now) {
+  const out = []
+  for (const l of licenses) {
+    const t = tenantById[l.tenant_id] ?? {}
+    const base = { tenant_id: l.tenant_id, ext: t.external_id ?? null, name: t.name ?? '(sin tenant)' }
+    const dR = daysUntil(l.current_period_end, now)
+    if (dR !== null && dR >= 0 && dR <= 45) out.push({ ...base, type: 'renovación', in_days: dR, date: l.current_period_end })
+    const dT = daysUntil(l.trial_ends_at, now)
+    if (dT !== null && dT >= 0 && dT <= 45) out.push({ ...base, type: 'fin de prueba', in_days: dT, date: l.trial_ends_at })
+  }
+  return out.sort((a, b) => a.in_days - b.in_days)
+}
 
 function Bars({ title, rows, total, colorFor }) {
   return (
@@ -33,15 +56,52 @@ function Bars({ title, rows, total, colorFor }) {
   )
 }
 
+// Renders the follow-up email status for one tenant inside an expanded row.
+function FollowupDetail({ state, emailCapable }) {
+  if (!emailCapable) {
+    return <p className="text-xs text-ink-faint">Esta app no lleva registro de correos de seguimiento. <span className="text-ink-mute">(Envío manual: próxima fase.)</span></p>
+  }
+  if (!state || state.loading) return <p className="text-xs text-ink-mute">Cargando estado del correo…</p>
+  if (state.error) return <p className="text-xs text-red-600">No se pudo leer: {state.error}</p>
+  if (state.supported === false) return <p className="text-xs text-ink-faint">Sin registro de correos para este tenant.</p>
+
+  const sent = (state.records ?? [])
+    .filter((r) => r.status === 'sent' && FOLLOWUP_RE.test(r.email_type || ''))
+    .sort((a, b) => String(b.sent_at).localeCompare(String(a.sent_at)))
+  const last = sent[0]
+
+  return (
+    <div className="space-y-2">
+      {last ? (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">✓ correo enviado</span>
+          <span className="text-ink-mute">{last.sent_at ? new Date(last.sent_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'} · <span className="font-mono">{last.email_type}</span></span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 font-medium text-amber-700">· sin correo de seguimiento</span>
+          <span className="text-ink-faint">aún no se ha enviado recordatorio</span>
+        </div>
+      )}
+      {sent.length > 1 && (
+        <div className="text-[11px] text-ink-faint">Historial: {sent.slice(0, 5).map((r) => r.email_type).join(' · ')}</div>
+      )}
+    </div>
+  )
+}
+
 export function AppDetail() {
   const { appId } = useParams()
   const [app, setApp] = useState(undefined) // undefined = loading, null = not found
   const [data, setData] = useState(null)
+  const [venc, setVenc] = useState([]) // tenant-aware upcoming renewals/trials
   const [usage, setUsage] = useState(null) // { day, metrics:[{metric,value}] }
   const [lastSync, setLastSync] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null) // which control action is running
   const [flash, setFlash] = useState(null) // { ok, msg }
+  const [openRow, setOpenRow] = useState(null) // expanded vencimiento index
+  const [followups, setFollowups] = useState({}) // tenantExt -> { loading, supported, records, error }
 
   const load = useCallback(async () => {
     const apps = await fetchApps()
@@ -50,13 +110,18 @@ export function AppDetail() {
     if (!a) return
 
     const [l, t, u] = await Promise.all([
-      supabase.from('licenses').select('app_id, status, plan, seats, trial_ends_at, current_period_end, synced_at').eq('app_id', appId),
-      supabase.from('tenants').select('app_id').eq('app_id', appId),
+      supabase.from('licenses').select('app_id, status, plan, seats, trial_ends_at, current_period_end, synced_at, tenant_id').eq('app_id', appId),
+      supabase.from('tenants').select('id, app_id, external_id, name').eq('app_id', appId),
       supabase.from('usage_daily').select('metric, value, day').eq('app_id', appId).is('tenant_id', null).order('day', { ascending: false }).limit(50),
     ])
     if (l.error) throw l.error
-    setData(summarizePortfolio({ apps: [a], licenses: l.data ?? [], tenants: t.data ?? [] }))
-    setLastSync((l.data ?? []).reduce((m, r) => (r.synced_at && (!m || r.synced_at > m) ? r.synced_at : m), null))
+    const licenses = l.data ?? []
+    const tenants = t.data ?? []
+    setData(summarizePortfolio({ apps: [a], licenses, tenants }))
+    setLastSync(licenses.reduce((m, r) => (r.synced_at && (!m || r.synced_at > m) ? r.synced_at : m), null))
+
+    const tenantById = Object.fromEntries(tenants.map((x) => [x.id, x]))
+    setVenc(buildVencimientos(licenses, tenantById, Date.now()))
 
     const rows = u.data ?? []
     if (rows.length) {
@@ -66,6 +131,20 @@ export function AppDetail() {
   }, [appId])
 
   useEffect(() => { load().catch((e) => setError(e.message)) }, [load])
+
+  // Drill into a vencimiento: load its follow-up email status on demand.
+  async function toggleRow(i, ext) {
+    if (openRow === i) { setOpenRow(null); return }
+    setOpenRow(i)
+    if (!ext || followups[ext]) return // already cached or no tenant id
+    setFollowups((m) => ({ ...m, [ext]: { loading: true } }))
+    try {
+      const out = await emailStatus(appId, ext)
+      setFollowups((m) => ({ ...m, [ext]: { loading: false, supported: out.supported, records: out.records ?? [] } }))
+    } catch (e) {
+      setFollowups((m) => ({ ...m, [ext]: { loading: false, error: e.message } }))
+    }
+  }
 
   async function doSync(kinds, label) {
     setBusy(label); setFlash(null)
@@ -90,6 +169,7 @@ export function AppDetail() {
 
   const t = data?.totals
   const operable = app.backend === 'base44'
+  const emailCap = !!app.config?.email_log
 
   return (
     <div>
@@ -177,21 +257,36 @@ export function AppDetail() {
 
           <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
             <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Vencimientos próximos</h3>
-            <p className="mt-1 text-xs text-ink-faint">Renovaciones y fines de prueba en los próximos 45 días.</p>
-            <div className="mt-4 space-y-2">
-              {data.upcoming.length === 0 && <p className="text-sm text-ink-faint">Nada por vencer pronto. 🎉</p>}
-              {data.upcoming.slice(0, 8).map((u, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className={`h-1.5 w-1.5 rounded-full ${u.type === 'fin de prueba' ? 'bg-amber-400' : 'bg-brand'}`} />
-                    <span className="font-medium text-ink truncate">{u.name}</span>
-                    <span className="text-ink-mute">· {u.type}</span>
-                  </span>
-                  <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
-                    {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
-                  </span>
-                </div>
-              ))}
+            <p className="mt-1 text-xs text-ink-faint">
+              Renovaciones y fines de prueba en los próximos 45 días.
+              {emailCap ? ' Clic en cada uno para ver si ya se envió el correo de seguimiento.' : ''}
+            </p>
+            <div className="mt-4 divide-y divide-hair">
+              {venc.length === 0 && <p className="text-sm text-ink-faint">Nada por vencer pronto. 🎉</p>}
+              {venc.slice(0, 12).map((u, i) => {
+                const open = openRow === i
+                return (
+                  <div key={i} className="py-1.5 first:pt-0">
+                    <button onClick={() => toggleRow(i, u.ext)}
+                      className="group flex w-full items-center justify-between gap-3 py-1 text-left text-sm">
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span aria-hidden className={`text-ink-faint transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
+                        <span className={`h-1.5 w-1.5 rounded-full ${u.type === 'fin de prueba' ? 'bg-amber-400' : 'bg-brand'}`} />
+                        <span className="font-medium text-ink truncate group-hover:text-brand">{u.name}</span>
+                        <span className="text-ink-mute">· {u.type}</span>
+                      </span>
+                      <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
+                        {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="pl-7 pr-1 pb-2 pt-1">
+                        <FollowupDetail state={followups[u.ext]} emailCapable={emailCap} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </>
