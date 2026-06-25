@@ -2,7 +2,7 @@
 // the normalized tenant + license rows into the bodega. Idempotent (upsert on
 // the natural keys). Scheduled in vercel.json; also runnable on demand.
 import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { clientFor, listAll } from '../_lib/base44Client.js'
+import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
 import { mapLicenseRecord, isMappable } from '../_lib/sync/licenseMapping.js'
 
 function dedupeBy(arr, keyFn) {
@@ -13,11 +13,18 @@ function dedupeBy(arr, keyFn) {
 
 async function syncApp(app) {
   const entity = app.config?.license_entity
-  const { client, hasToken } = clientFor(app)
   if (!entity) return { app: app.id, skipped: 'no license_entity in config' }
-  if (!hasToken) return { app: app.id, skipped: 'no Base44 token' }
 
-  const records = await listAll(client.entities[entity])
+  // Read the app's licenses through its HMAC-signed acaciaControl bridge.
+  let result
+  try {
+    result = await callBridge(app, 'licenses.list', { entity })
+  } catch (e) {
+    return { app: app.id, skipped: `bridge unreachable: ${e.message}` }
+  }
+  const records = result?.records ?? result?.data?.records ?? []
+  if (!Array.isArray(records)) return { app: app.id, error: 'bridge returned no records array' }
+
   const mapped = records.filter((r) => isMappable(r, app)).map((r) => mapLicenseRecord(r, app))
 
   const tenants = dedupeBy(mapped.map((m) => m.tenant), (t) => t.external_id)
@@ -50,6 +57,14 @@ export default async function handler(req, res) {
 
   const { data: apps, error } = await supabaseAdmin.from('apps').select('*').eq('backend', 'base44')
   if (error) return res.status(500).json({ error: error.message })
+
+  if (!bridgeConfigured()) {
+    return res.status(200).json({
+      ok: true, apps: apps.length, synced: 0,
+      note: 'INGEST_HMAC_SECRET no está configurado — ponlo en Vercel y en cada app Base44.',
+      summary: apps.map((a) => ({ app: a.id, skipped: 'INGEST_HMAC_SECRET not set' })),
+    })
+  }
 
   const summary = []
   for (const app of apps) {
