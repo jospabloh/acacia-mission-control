@@ -36,4 +36,23 @@ subdomain — it is an internal operator tool, not a public marketing page.
 ## First login
 
 The owner (`h.josepablo@gmail.com`) is already seeded in `members`. Sign in with
-the temporary password and change it from the account immediately.
+the temporary password and change it immediately, or use **Continue with Google**
+(see below).
+
+## Google sign-in (OAuth)
+
+The app already calls `signInWithOAuth({ provider: 'google' })` and the owner is
+auto-provisioned on first login (migration `0003`). Two one-time setup steps,
+both outside this repo:
+
+1. **Google Cloud** → APIs & Services → Credentials → Create **OAuth client ID**
+   (type *Web application*). Authorized redirect URI:
+   `https://xrvjnadirzsjvzknfyjf.supabase.co/auth/v1/callback`. Copy the client
+   ID + secret.
+2. **Supabase** → Authentication → Providers → **Google** → enable, paste the
+   client ID + secret. Then Authentication → URL Configuration → set **Site URL**
+   to `https://control.acaciaco.com.mx` and add it (plus the `*.vercel.app` URL)
+   to **Redirect URLs**.
+
+Until both are done, the "Continue with Google" button returns a clear message
+telling you Google isn't enabled yet; email + password keeps working meanwhile.
