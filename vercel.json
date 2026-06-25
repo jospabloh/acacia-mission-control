@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "crons": [
+    {
+      "path": "/api/cron/sync-licenses",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-health",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}
