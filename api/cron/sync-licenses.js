@@ -1,50 +1,9 @@
-// Cron: for every Base44 app in the registry, read its license entity and upsert
-// the normalized tenant + license rows into the bodega. Idempotent (upsert on
-// the natural keys). Scheduled in vercel.json; also runnable on demand.
+// Cron: for every Base44 app in the registry, sync its licenses into the bodega.
+// Idempotent. Scheduled in vercel.json; also runnable on demand. The per-app
+// logic lives in _lib/sync/syncLicenses.js (shared with the control endpoint).
 import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { mapLicenseRecord, isMappable } from '../_lib/sync/licenseMapping.js'
-
-function dedupeBy(arr, keyFn) {
-  const seen = new Map()
-  for (const item of arr) if (!seen.has(keyFn(item))) seen.set(keyFn(item), item)
-  return [...seen.values()]
-}
-
-async function syncApp(app) {
-  const entity = app.config?.license_entity
-  if (!entity) return { app: app.id, skipped: 'no license_entity in config' }
-
-  // Read the app's licenses through its HMAC-signed acaciaControl bridge.
-  let result
-  try {
-    result = await callBridge(app, 'licenses.list', { entity })
-  } catch (e) {
-    return { app: app.id, skipped: `bridge unreachable: ${e.message}` }
-  }
-  const records = result?.records ?? result?.data?.records ?? []
-  if (!Array.isArray(records)) return { app: app.id, error: 'bridge returned no records array' }
-
-  const mapped = records.filter((r) => isMappable(r, app)).map((r) => mapLicenseRecord(r, app))
-
-  const tenants = dedupeBy(mapped.map((m) => m.tenant), (t) => t.external_id)
-  const { data: tRows, error: tErr } = await supabaseAdmin
-    .from('tenants').upsert(tenants, { onConflict: 'app_id,external_id' }).select('id, external_id')
-  if (tErr) throw new Error(`tenants upsert: ${tErr.message}`)
-
-  const idByExt = Object.fromEntries(tRows.map((r) => [r.external_id, r.id]))
-  const now = new Date().toISOString()
-  const licenses = mapped.map((m) => ({
-    ...m.license,
-    tenant_id: idByExt[m.tenant.external_id] ?? null,
-    synced_at: now,
-  }))
-  const { error: lErr } = await supabaseAdmin
-    .from('licenses').upsert(licenses, { onConflict: 'app_id,external_id' })
-  if (lErr) throw new Error(`licenses upsert: ${lErr.message}`)
-
-  return { app: app.id, records: records.length, tenants: tenants.length, licenses: licenses.length }
-}
+import { bridgeConfigured } from '../_lib/appBridge.js'
+import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 
 export default async function handler(req, res) {
   // Gate: when CRON_SECRET is set, require it (Vercel sends it as a Bearer);
@@ -68,7 +27,7 @@ export default async function handler(req, res) {
 
   const summary = []
   for (const app of apps) {
-    try { summary.push(await syncApp(app)) }
+    try { summary.push(await syncLicensesForApp(app)) }
     catch (e) { summary.push({ app: app.id, error: e.message }) }
   }
 
