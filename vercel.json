@@ -5,5 +5,8 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/sync-licenses", "schedule": "0 8 * * *" }
   ]
 }
