@@ -1,7 +1,7 @@
 // Cron: for every Base44 app in the registry, read its license entity and upsert
 // the normalized tenant + license rows into the bodega. Idempotent (upsert on
 // the natural keys). Scheduled in vercel.json; also runnable on demand.
-import { supabaseAdmin, audit } from '../_lib/supabaseAdmin.js'
+import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
 import { clientFor, listAll } from '../_lib/base44Client.js'
 import { mapLicenseRecord, isMappable } from '../_lib/sync/licenseMapping.js'
 
@@ -46,6 +46,7 @@ export default async function handler(req, res) {
   if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
     return res.status(401).json({ error: 'unauthorized' })
   }
+  if (!requireSupabase(res)) return
 
   const { data: apps, error } = await supabaseAdmin.from('apps').select('*').eq('backend', 'base44')
   if (error) return res.status(500).json({ error: error.message })
