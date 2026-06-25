@@ -8,9 +8,12 @@ export function Layout() {
     <div className="min-h-screen bg-acacia-50 text-acacia-900">
       <div className="flex">
         <aside className="w-60 shrink-0 border-r bg-white min-h-screen p-4 flex flex-col">
-          <div className="px-3 pb-4">
-            <div className="font-semibold">ACACIA</div>
-            <div className="text-xs text-acacia-500">Mission Control</div>
+          <div className="px-3 pb-4 flex items-center gap-2.5">
+            <img src="/mc-mark.svg" alt="" className="h-8 w-8" />
+            <div className="leading-none">
+              <div className="font-semibold">ACACIA</div>
+              <div className="text-xs text-acacia-500 mt-0.5">Mission Control</div>
+            </div>
           </div>
           <Nav />
           <div className="mt-auto pt-4 border-t text-xs text-acacia-500">
