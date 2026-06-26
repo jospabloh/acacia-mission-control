@@ -43,14 +43,40 @@ function AppCard({ app, stat }) {
   )
 }
 
-// Freeware/site: inventory, not operated by Mission Control — just a link out.
-function LaunchTile({ app }) {
+// Freeware/sites: data-first, not a launcher. A compact table built for KPIs
+// (traffic, usage) with just a small ↗ to open. KPI columns stay "—" until a
+// web-analytics source is connected.
+function CatalogTable({ items }) {
   return (
-    <a href={app.url} target="_blank" rel="noreferrer"
-      className="group flex items-center justify-between gap-2 rounded-lg border border-hair bg-paper-card px-4 py-3 hover:border-brand/40 hover:bg-white transition">
-      <span className="text-sm font-medium text-ink truncate">{app.name}</span>
-      <Icon name="external" size={14} className="text-ink-faint transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand" />
-    </a>
+    <div className="overflow-hidden rounded-xl border border-hair bg-paper-card">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
+          <tr>
+            <th className="px-4 py-2.5">Nombre</th>
+            <th className="px-4 py-2.5">Visitas 30d</th>
+            <th className="px-4 py-2.5">Usuarios</th>
+            <th className="px-4 py-2.5">Tendencia</th>
+            <th className="px-4 py-2.5 text-right">Abrir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((a) => (
+            <tr key={a.id} className="border-b border-hair last:border-0">
+              <td className="px-4 py-2.5 font-medium text-ink">{a.name}</td>
+              <td className="px-4 py-2.5 text-ink-faint">—</td>
+              <td className="px-4 py-2.5 text-ink-faint">—</td>
+              <td className="px-4 py-2.5 text-ink-faint">—</td>
+              <td className="px-4 py-2.5 text-right">
+                <a href={a.url} target="_blank" rel="noreferrer" title="Abrir"
+                  className="inline-flex text-ink-faint hover:text-brand">
+                  <Icon name="external" size={14} />
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -117,9 +143,10 @@ export function Dashboard() {
                 {items.map((a) => <AppCard key={a.id} app={a} stat={stats[a.id]} />)}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {items.map((a) => <LaunchTile key={a.id} app={a} />)}
-              </div>
+              <>
+                <p className="mb-2 text-xs text-ink-faint">Tráfico y uso aparecerán aquí al conectar la analítica web.</p>
+                <CatalogTable items={items} />
+              </>
             )}
           </section>
         )
