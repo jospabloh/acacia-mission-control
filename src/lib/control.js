@@ -24,3 +24,8 @@ export function runSync(appId, kinds = ['licenses', 'usage']) {
 export function emailStatus(appId, tenantExternalId) {
   return postControl('/api/control/email-status', { appId, tenantExternalId })
 }
+
+// WRITE: change a tenant's license (reactivate | suspend | view_only | set_plan).
+export function licenseAction(appId, licenseExternalId, op, plan) {
+  return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan })
+}
