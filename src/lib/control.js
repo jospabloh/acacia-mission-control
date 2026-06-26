@@ -24,3 +24,18 @@ export function runSync(appId, kinds = ['licenses', 'usage']) {
 export function emailStatus(appId, tenantExternalId) {
   return postControl('/api/control/email-status', { appId, tenantExternalId })
 }
+
+// WRITE: change a tenant's license (reactivate | suspend | view_only | set_plan).
+export function licenseAction(appId, licenseExternalId, op, plan) {
+  return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan })
+}
+
+// Read tenant recipient contacts for an app (for targeting comunicados).
+export function listContacts(appId) {
+  return postControl('/api/control/list-contacts', { appId })
+}
+
+// Send a comunicado (renewal | campaign | maintenance) to recipients. Customer-facing.
+export function sendMessage(payload) {
+  return postControl('/api/control/send-message', payload)
+}
