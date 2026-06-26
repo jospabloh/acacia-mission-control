@@ -25,6 +25,8 @@ const PLANS = {
 const HAS_VIEW_ONLY = new Set(['flowfin', 'stockflow', 'liuma', 'puntos']) // rumbo has no view_only
 // Apps that support the renewal/payment-confirmation flow (all 5 today).
 const HAS_BILLING = new Set(['flowfin', 'stockflow', 'rumbo', 'liuma', 'puntos'])
+// Per-app expiry-day convention (mirror of api/_lib/licenseControl billing.dayConvention).
+const FIRST_OF_MONTH = new Set(['flowfin', 'liuma']) // align to the 1st (Mercado Pago bills on the 1st)
 
 const OP_COPY = {
   reactivate: { label: 'Reactivar', cls: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50', warn: 'Reactiva el acceso de escritura del tenant.' },
@@ -44,7 +46,7 @@ function fmtDate(v) {
 }
 // Stack a +N-month renewal from the later of (current expiry, today). Preview only
 // — api/_lib/licenseControl.js computeRenewalExpiry is authoritative on the server.
-function previewExpiry(currentExpiry, months) {
+function previewExpiry(currentExpiry, months, appId) {
   const now = new Date()
   const cur = parseDate(currentExpiry)
   const base = cur && cur.getTime() > now.getTime() ? cur : now
@@ -53,6 +55,8 @@ function previewExpiry(currentExpiry, months) {
   d.setDate(1); d.setMonth(d.getMonth() + months)
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
   d.setDate(Math.min(day, last))
+  // FlowFin / LIUMA land on the 1st of the resulting month (Mercado Pago bills then).
+  if (FIRST_OF_MONTH.has(appId)) d.setDate(1)
   return d
 }
 
@@ -245,7 +249,7 @@ export function Licenses() {
               className="mt-1.5 w-full rounded-lg border border-hair bg-white px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint" />
 
             <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              Nuevo vencimiento: <span className="font-semibold">{fmtDate(previewExpiry(pay.row.current_period_end, months).toISOString())}</span>. La licencia queda <span className="font-semibold">activa</span>.
+              Nuevo vencimiento: <span className="font-semibold">{fmtDate(previewExpiry(pay.row.current_period_end, months, pay.row.app_id).toISOString())}</span>. La licencia queda <span className="font-semibold">activa</span>.
             </p>
             <p className="mt-2 text-xs text-ink-faint">Confirma un pago recurrente ya cobrado en Mercado Pago. Se escribe sobre la app vía <code className="font-mono">acaciaControl</code> como <code className="font-mono">role:admin</code>.</p>
 
