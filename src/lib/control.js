@@ -39,3 +39,8 @@ export function listContacts(appId) {
 export function sendMessage(payload) {
   return postControl('/api/control/send-message', payload)
 }
+
+// Aggregated first-party web KPIs per path (Freeware/Sitios). Read-only.
+export function webKpis() {
+  return postControl('/api/web-kpis', {})
+}

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 
+const PIPELINE = ['new', 'contacted', 'qualified', 'won', 'lost']
+const STATUS_LABEL = { new: 'Nuevo', contacted: 'Contactado', qualified: 'Calificado', won: 'Ganado', lost: 'Perdido' }
 const STATUS_STYLE = {
   new: 'bg-blue-50 text-blue-700',
   contacted: 'bg-amber-50 text-amber-700',
@@ -12,44 +14,87 @@ const STATUS_STYLE = {
 
 export function CRM() {
   const [rows, setRows] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [flash, setFlash] = useState(null)
 
-  useEffect(() => {
-    supabase.from('leads')
-      .select('id, name, email, app_interest, status, created_at')
+  function load() {
+    return supabase.from('leads')
+      .select('id, source, name, email, phone, app_interest, message, status, created_at')
       .order('created_at', { ascending: false })
-      .limit(100)
+      .limit(300)
       .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
-  }, [])
+  }
+  useEffect(() => { load() }, [])
+
+  async function setStatus(id, status) {
+    setBusy(id); setFlash(null)
+    const { error } = await supabase.from('leads').update({ status }).eq('id', id)
+    if (error) setFlash({ ok: false, msg: error.message })
+    else setRows((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)))
+    setBusy(null)
+  }
+
+  const kpis = useMemo(() => {
+    const r = rows ?? []
+    const weekAgo = Date.now() - 7 * 86_400_000
+    const byStatus = {}
+    let fresh = 0
+    for (const l of r) {
+      byStatus[l.status ?? 'new'] = (byStatus[l.status ?? 'new'] ?? 0) + 1
+      if (new Date(l.created_at).getTime() >= weekAgo) fresh++
+    }
+    return { total: r.length, fresh, won: byStatus.won ?? 0, open: (byStatus.new ?? 0) + (byStatus.contacted ?? 0) + (byStatus.qualified ?? 0), byStatus }
+  }, [rows])
+
+  if (rows === null) return (<div><PageHeader title="CRM" /><p className="text-sm text-ink-mute">Cargando…</p></div>)
 
   return (
     <div>
-      <PageHeader title="CRM" subtitle="Leads del sitio y directorio de tenants." />
-      {rows === null ? (
-        <p className="text-sm text-ink-mute">Cargando…</p>
-      ) : rows.length === 0 ? (
-        <EmptyState icon="crm" title="Sin leads todavía" phase={1}>
-          Los prospectos del formulario de <code className="font-mono text-ink">acaciaco.com.mx</code>
-          {' '}(vía Google Sheets) entrarán aquí para darles seguimiento.
-        </EmptyState>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-hair bg-paper-card">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
-              <tr><th className="px-4 py-3">Nombre</th><th className="px-4 py-3">Correo</th><th className="px-4 py-3">Interés</th><th className="px-4 py-3">Estado</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b border-hair last:border-0">
-                  <td className="px-4 py-3 font-medium text-ink">{r.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-ink-soft">{r.email ?? '—'}</td>
-                  <td className="px-4 py-3 text-ink-soft">{r.app_interest ?? '—'}</td>
-                  <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{r.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <PageHeader title="CRM" subtitle="Leads del sitio y seguimiento de pipeline." />
+      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Leads" value={kpis.total} hint={`${kpis.fresh} nuevos ≤7d`} />
+        <StatCard label="Abiertos" value={kpis.open} accent hint="por trabajar" />
+        <StatCard label="Ganados" value={kpis.won} />
+        <StatCard label="Perdidos" value={kpis.byStatus.lost ?? 0} />
+      </div>
+
+      <div className="mt-6 overflow-x-auto rounded-xl border border-hair bg-paper-card">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
+            <tr>
+              <th className="px-4 py-3">Lead</th><th className="px-4 py-3">Interés</th><th className="px-4 py-3">Origen</th>
+              <th className="px-4 py-3">Fecha</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Mover a</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-hair last:border-0 align-top">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-ink">{r.name ?? '—'}</div>
+                  <div className="text-xs text-ink-faint">{r.email ?? ''}{r.phone ? ` · ${r.phone}` : ''}</div>
+                  {r.message && <div className="mt-1 max-w-xs truncate text-xs text-ink-mute" title={r.message}>{r.message}</div>}
+                </td>
+                <td className="px-4 py-3 text-ink-soft">{r.app_interest ?? '—'}</td>
+                <td className="px-4 py-3 text-ink-faint">{r.source ?? '—'}</td>
+                <td className="px-4 py-3 text-ink-soft">{r.created_at ? new Date(r.created_at).toLocaleDateString('es-MX') : '—'}</td>
+                <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{STATUS_LABEL[r.status] ?? r.status ?? '—'}</span></td>
+                <td className="px-4 py-3">
+                  <select value="" disabled={busy === r.id} onChange={(e) => e.target.value && setStatus(r.id, e.target.value)}
+                    className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-ink disabled:opacity-50">
+                    <option value="">{busy === r.id ? '…' : 'Cambiar…'}</option>
+                    {PIPELINE.filter((s) => s !== r.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-4 text-ink-faint">Sin leads aún. Conecta el formulario de acaciaco.com.mx al endpoint <code className="font-mono text-ink">/api/ingest/lead</code> y entrarán aquí.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

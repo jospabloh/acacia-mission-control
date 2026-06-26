@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
+import { webKpis } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { Icon } from '../components/icons.jsx'
+
+function pathOf(url) { try { return new URL(url).pathname } catch { return null } }
+function fmt(n) { return typeof n === 'number' ? n.toLocaleString('es-MX') : '—' }
 
 const BACKEND_LABEL = { base44: 'Base44', supabase: 'Supabase', external: 'Externo', static: 'Estático' }
 
@@ -46,7 +50,7 @@ function AppCard({ app, stat }) {
 // Freeware/sites: data-first, not a launcher. A compact table built for KPIs
 // (traffic, usage) with just a small ↗ to open. KPI columns stay "—" until a
 // web-analytics source is connected.
-function CatalogTable({ items }) {
+function CatalogTable({ items, kpis }) {
   return (
     <div className="overflow-hidden rounded-xl border border-hair bg-paper-card">
       <table className="w-full text-sm">
@@ -55,25 +59,28 @@ function CatalogTable({ items }) {
             <th className="px-4 py-2.5">Nombre</th>
             <th className="px-4 py-2.5">Visitas 30d</th>
             <th className="px-4 py-2.5">Usuarios</th>
-            <th className="px-4 py-2.5">Tendencia</th>
+            <th className="px-4 py-2.5">Últimos 7d</th>
             <th className="px-4 py-2.5 text-right">Abrir</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((a) => (
-            <tr key={a.id} className="border-b border-hair last:border-0">
-              <td className="px-4 py-2.5 font-medium text-ink">{a.name}</td>
-              <td className="px-4 py-2.5 text-ink-faint">—</td>
-              <td className="px-4 py-2.5 text-ink-faint">—</td>
-              <td className="px-4 py-2.5 text-ink-faint">—</td>
-              <td className="px-4 py-2.5 text-right">
-                <a href={a.url} target="_blank" rel="noreferrer" title="Abrir"
-                  className="inline-flex text-ink-faint hover:text-brand">
-                  <Icon name="external" size={14} />
-                </a>
-              </td>
-            </tr>
-          ))}
+          {items.map((a) => {
+            const k = kpis?.[pathOf(a.url)]
+            return (
+              <tr key={a.id} className="border-b border-hair last:border-0">
+                <td className="px-4 py-2.5 font-medium text-ink">{a.name}</td>
+                <td className="px-4 py-2.5 text-ink-soft">{k ? <span className="font-display font-semibold text-ink">{fmt(k.visits30)}</span> : <span className="text-ink-faint">—</span>}</td>
+                <td className="px-4 py-2.5 text-ink-soft">{k ? fmt(k.visitors30) : <span className="text-ink-faint">—</span>}</td>
+                <td className="px-4 py-2.5 text-ink-soft">{k ? fmt(k.visits7) : <span className="text-ink-faint">—</span>}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <a href={a.url} target="_blank" rel="noreferrer" title="Abrir"
+                    className="inline-flex text-ink-faint hover:text-brand">
+                    <Icon name="external" size={14} />
+                  </a>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -83,6 +90,7 @@ function CatalogTable({ items }) {
 export function Dashboard() {
   const [apps, setApps] = useState([])
   const [stats, setStats] = useState({})
+  const [kpis, setKpis] = useState(null) // { path: { visits30, visitors30, visits7 } }
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -98,7 +106,11 @@ export function Dashboard() {
       for (const r of l.data ?? []) { const x = bump(r.app_id); x.licenses++; if (r.status === 'active') x.active++ }
       setStats(s)
     })
+
+    webKpis().then((r) => setKpis(r.kpis ?? {})).catch(() => setKpis({}))
   }, [])
+
+  const hasKpis = kpis && Object.keys(kpis).length > 0
 
   const byCat = useMemo(() => {
     const m = { app: [], freeware: [], site: [] }
@@ -144,8 +156,8 @@ export function Dashboard() {
               </div>
             ) : (
               <>
-                <p className="mb-2 text-xs text-ink-faint">Tráfico y uso aparecerán aquí al conectar la analítica web.</p>
-                <CatalogTable items={items} />
+                {!hasKpis && <p className="mb-2 text-xs text-ink-faint">Tráfico midiéndose — los KPIs aparecen conforme llegan visitas (analítica propia).</p>}
+                <CatalogTable items={items} kpis={kpis} />
               </>
             )}
           </section>
