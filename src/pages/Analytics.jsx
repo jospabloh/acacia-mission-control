@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
-import { webKpis } from '../lib/control.js'
+import { webKpis, usageByTenant } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 
 const STATUS_LABEL = { active: 'Activas', trial: 'En prueba', view_only: 'Solo lectura', past_due: 'Vencidas', canceled: 'Canceladas', desconocido: 'Sin estado' }
@@ -30,6 +30,57 @@ function Delta({ values }) {
   if (d === 0) return <span className="text-[11px] text-ink-faint">=</span>
   const up = d > 0
   return <span className={`text-[11px] font-medium ${up ? 'text-emerald-600' : 'text-red-500'}`}>{up ? '▲' : '▼'} {fmt(Math.abs(d))}</span>
+}
+
+const USAGE_APPS = [
+  { id: 'flowfin', name: 'FlowFin' }, { id: 'stockflow', name: 'StockFlow' },
+  { id: 'puntos', name: 'Puntos+' }, { id: 'rumbo', name: 'Rumbo' }, { id: 'liuma', name: 'LIUMA' },
+]
+
+// Per-tenant consumption — which tenants use the app most (counts only).
+function TenantConsumption() {
+  const [appId, setAppId] = useState('flowfin')
+  const [res, setRes] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState(null)
+  useEffect(() => {
+    setLoading(true); setErr(null); setRes(null)
+    usageByTenant(appId).then(setRes).catch((e) => setErr(e.message)).finally(() => setLoading(false))
+  }, [appId])
+  const top = res?.top ?? []
+  const max = Math.max(1, ...top.map((r) => r.count))
+  return (
+    <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Consumo por tenant</h3>
+        <select value={appId} onChange={(e) => setAppId(e.target.value)}
+          className="rounded-lg border border-hair bg-white px-3 py-1.5 text-sm">
+          {USAGE_APPS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      </div>
+      <p className="mt-1 text-xs text-ink-faint">Tenants con más {res?.label ?? 'actividad'} — para upsell o soporte proactivo. Solo conteos, sin datos personales.</p>
+      {loading ? <p className="mt-3 text-sm text-ink-mute">Cargando…</p>
+        : err ? <p className="mt-3 text-sm text-red-600">No se pudo leer: {err}</p>
+        : top.length ? (
+          <div className="mt-4 space-y-2.5">
+            {top.slice(0, 10).map((r, i) => (
+              <div key={r.id}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="text-ink-faint w-4 text-right">{i + 1}</span>
+                    <span className="font-medium text-ink truncate">{r.name ?? <span className="font-mono text-ink-mute">{r.id}</span>}</span>
+                  </span>
+                  <span className="text-ink-mute"><span className="font-display font-semibold text-ink">{fmt(r.count)}</span> {res.label}</span>
+                </div>
+                <div className="mt-1 h-2 rounded-full bg-paper-subtle overflow-hidden">
+                  <div className="h-full rounded-full bg-brand" style={{ width: `${(r.count / max) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="mt-3 text-sm text-ink-faint">Sin datos para esta app. (Requiere el puente con <code className="font-mono text-ink">usage.byTenant</code> desplegado.)</p>}
+    </div>
+  )
 }
 
 function Bars({ title, rows, total, colorFor }) {
@@ -151,6 +202,9 @@ export function Analytics() {
         )}
       </div>
 
+      {/* Consumo por tenant */}
+      <TenantConsumption />
+
       {/* Tráfico web */}
       <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
         <div className="flex items-baseline justify-between">
@@ -224,7 +278,7 @@ export function Analytics() {
       </div>
 
       <p className="mt-6 text-xs text-ink-faint">
-        Próxima capa: consumo por tenant (para upsell / soporte proactivo) — requiere una acción nueva del puente.
+        Próxima capa: costos de infraestructura por app e ingresos por tenant.
       </p>
     </div>
   )

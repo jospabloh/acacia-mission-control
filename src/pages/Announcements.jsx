@@ -7,6 +7,8 @@ const MSG_APPS = [
   { id: 'puntos', name: 'Puntos+' }, { id: 'rumbo', name: 'Rumbo' }, { id: 'liuma', name: 'LIUMA' },
 ]
 const TYPES = [
+  { id: 'renewal_fyi', label: 'Aviso de cobro (FYI)', hint: 'Para clientes CON plan: aviso personal de que el cobro automático corre el día 1. No tienen que hacer nada.' },
+  { id: 'trial_offer', label: 'Ofrecer plan', hint: 'Para clientes SIN plan (trial vencido): invitación a activar su suscripción mensual.' },
   { id: 'renewal', label: 'Renovación', hint: 'Recordatorio de vencimiento con la fecha de cada cliente.' },
   { id: 'campaign', label: 'Campaña', hint: 'Mensaje libre (tú escribes asunto y cuerpo).' },
   { id: 'maintenance', label: 'Mantenimiento', hint: 'Aviso de ventana de downtime programada.' },
@@ -14,7 +16,7 @@ const TYPES = [
 
 export function Announcements() {
   const [appId, setAppId] = useState('flowfin')
-  const [type, setType] = useState('renewal')
+  const [type, setType] = useState('renewal_fyi')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [maint, setMaint] = useState({ date: '', time: '', duration: '' })
@@ -99,9 +101,18 @@ export function Announcements() {
                 className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm" />
             </>
           )}
+          {type === 'trial_offer' && (
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Detalle opcional (planes, precio, promoción)…"
+              className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm" />
+          )}
           {type === 'renewal' && (
             <p className="rounded-lg bg-paper-subtle px-3 py-2 text-sm text-ink-soft">
               Se envía el recordatorio de renovación con la <strong>fecha de vencimiento de cada cliente</strong> y la frase de valor de {appName}. Sin datos de uso.
+            </p>
+          )}
+          {type === 'renewal_fyi' && (
+            <p className="rounded-lg bg-paper-subtle px-3 py-2 text-sm text-ink-soft">
+              Aviso <strong>personal y FYI</strong> para clientes con plan activo: el cobro en Mercado Pago corre <strong>solo el día 1</strong>. Incluye la fecha hasta la que queda cubierto. Sin datos de uso.
             </p>
           )}
         </div>

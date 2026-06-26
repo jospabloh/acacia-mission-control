@@ -25,9 +25,10 @@ export function emailStatus(appId, tenantExternalId) {
   return postControl('/api/control/email-status', { appId, tenantExternalId })
 }
 
-// WRITE: change a tenant's license (reactivate | suspend | view_only | set_plan).
-export function licenseAction(appId, licenseExternalId, op, plan) {
-  return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan })
+// WRITE: change a tenant's license (reactivate | suspend | view_only | set_plan |
+// confirm_payment). For confirm_payment, opts carries { periodMonths, paymentReference }.
+export function licenseAction(appId, licenseExternalId, op, plan, opts = {}) {
+  return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan, ...opts })
 }
 
 // Read tenant recipient contacts for an app (for targeting comunicados).
@@ -43,4 +44,9 @@ export function sendMessage(payload) {
 // Aggregated first-party web KPIs per path (Freeware/Sitios). Read-only.
 export function webKpis() {
   return postControl('/api/web-kpis', {})
+}
+
+// Per-tenant consumption for one app (counts only). Read-only.
+export function usageByTenant(appId) {
+  return postControl('/api/control/usage-by-tenant', { appId })
 }
