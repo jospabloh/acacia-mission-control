@@ -29,3 +29,13 @@ export function emailStatus(appId, tenantExternalId) {
 export function licenseAction(appId, licenseExternalId, op, plan) {
   return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan })
 }
+
+// Read tenant recipient contacts for an app (for targeting comunicados).
+export function listContacts(appId) {
+  return postControl('/api/control/list-contacts', { appId })
+}
+
+// Send a comunicado (renewal | campaign | maintenance) to recipients. Customer-facing.
+export function sendMessage(payload) {
+  return postControl('/api/control/send-message', payload)
+}
