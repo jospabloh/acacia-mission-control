@@ -1,12 +1,13 @@
 // On-demand control action: sync ONE app's licenses and/or usage right now,
 // triggered by an admin from the app's control panel. Same per-app logic as the
 // daily crons, but gated by the operator's Supabase session (admin+) instead of
-// CRON_SECRET. POST { appId, kinds?: ['licenses','usage'] }.
+// CRON_SECRET. POST { appId, kinds?: ['licenses','usage','tickets'] }.
 import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
 import { bridgeConfigured } from '../_lib/appBridge.js'
 import { requireMember } from '../_lib/requireMember.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
+import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
@@ -28,6 +29,7 @@ export default async function handler(req, res) {
   try {
     if (kinds.includes('licenses')) result.licenses = await syncLicensesForApp(app)
     if (kinds.includes('usage')) result.usage = await syncUsageForApp(app, new Date().toISOString().slice(0, 10))
+    if (kinds.includes('tickets')) result.tickets = await syncTicketsForApp(app)
   } catch (e) {
     return res.status(502).json({ error: e.message, partial: result })
   }

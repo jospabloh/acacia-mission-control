@@ -1,9 +1,13 @@
-// Cron: for every Base44 app in the registry, sync its licenses into the bodega.
-// Idempotent. Scheduled in vercel.json; also runnable on demand. The per-app
-// logic lives in _lib/sync/syncLicenses.js (shared with the control endpoint).
+// Cron: daily portfolio sync. For every Base44 app in the registry, pull licenses,
+// product-usage counts, and support tickets into the bodega. Idempotent. Scheduled
+// once in vercel.json; also runnable on demand. Per-app logic is shared with the
+// control endpoints (_lib/sync/*). One function (not three) to stay within the
+// Vercel serverless-function budget.
 import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
 import { bridgeConfigured } from '../_lib/appBridge.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
+import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
+import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
 
 export default async function handler(req, res) {
   // Gate: when CRON_SECRET is set, require it (Vercel sends it as a Bearer);
@@ -21,17 +25,19 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true, apps: apps.length, synced: 0,
       note: 'INGEST_HMAC_SECRET no está configurado — ponlo en Vercel y en cada app Base44.',
-      summary: apps.map((a) => ({ app: a.id, skipped: 'INGEST_HMAC_SECRET not set' })),
     })
   }
 
+  const day = new Date().toISOString().slice(0, 10)
   const summary = []
   for (const app of apps) {
-    try { summary.push(await syncLicensesForApp(app)) }
-    catch (e) { summary.push({ app: app.id, error: e.message }) }
+    const row = { app: app.id }
+    try { row.licenses = await syncLicensesForApp(app) } catch (e) { row.licenses = { error: e.message } }
+    try { row.usage = await syncUsageForApp(app, day) } catch (e) { row.usage = { error: e.message } }
+    try { row.tickets = await syncTicketsForApp(app) } catch (e) { row.tickets = { error: e.message } }
+    summary.push(row)
   }
 
-  await audit('sync-licenses', { payload: { summary } })
-  const synced = summary.filter((s) => s.licenses != null)
-  return res.status(200).json({ ok: true, apps: summary.length, synced: synced.length, summary })
+  await audit('sync', { payload: { day, summary } })
+  return res.status(200).json({ ok: true, apps: summary.length, day, summary })
 }

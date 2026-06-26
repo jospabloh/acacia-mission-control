@@ -1,0 +1,84 @@
+// Support-ticket control, one function (Vercel function budget). Ops:
+//   - op:'thread'  → read a ticket's conversation (viewer+). For apps with a
+//     separate message entity (puntos/liuma) it calls the bridge tickets.thread;
+//     for rumbo the thread is inline on the synced ticket (responses[]).
+//   - op:'reply'   → post a staff reply (admin+) via bridge tickets.update.
+//   - op:'status'  → change the ticket status (admin+) via bridge tickets.update.
+// Writes re-sync the app's tickets so the bodega reflects the change.
+import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
+import { requireMember } from '../_lib/requireMember.js'
+import { ticketControlFor, normalizeMessage, buildTicketReply, buildTicketStatus } from '../_lib/ticketControl.js'
+import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
+  if (!requireSupabase(res)) return
+
+  const { appId, ticketExternalId, op, body, status } = req.body ?? {}
+  if (!appId || !ticketExternalId || !op) return res.status(400).json({ error: 'falta appId/ticketExternalId/op' })
+  const cfg = ticketControlFor(appId)
+  if (!cfg) return res.status(400).json({ error: `app ${appId} no soporta tickets` })
+
+  // Reads need viewer; writes need admin.
+  const member = await requireMember(req, res, op === 'thread' ? 'viewer' : 'admin')
+  if (!member) return
+
+  // Load the synced ticket (raw) — needed by every op.
+  const { data: ticket, error: tErr } = await supabaseAdmin
+    .from('tickets').select('raw').eq('app_id', appId).eq('external_id', String(ticketExternalId)).maybeSingle()
+  if (tErr) return res.status(500).json({ error: tErr.message })
+  if (!ticket) return res.status(404).json({ error: 'ticket no encontrado (sincroniza primero)' })
+
+  const sort = (arr) => arr.filter(Boolean).sort((a, b) => (Date.parse(a?.ts || 0) || 0) - (Date.parse(b?.ts || 0) || 0))
+
+  // ── READ: thread ───────────────────────────────────────────────────────────
+  if (op === 'thread') {
+    if (cfg.thread.mode === 'inline') {
+      const arr = Array.isArray(ticket.raw?.[cfg.thread.arrayField]) ? ticket.raw[cfg.thread.arrayField] : []
+      return res.status(200).json({ ok: true, messages: sort(arr.map((m) => normalizeMessage(appId, m))) })
+    }
+    if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
+    const { data: app } = await supabaseAdmin.from('apps').select('*').eq('id', appId).maybeSingle()
+    if (!app) return res.status(404).json({ error: 'app no encontrada' })
+    try {
+      const out = await callBridge(app, 'tickets.thread', {
+        messageEntity: cfg.thread.messageEntity, fkField: cfg.thread.fkField, ticketId: String(ticketExternalId),
+      })
+      const records = out?.records ?? out?.data?.records ?? []
+      return res.status(200).json({ ok: true, messages: sort(records.map((m) => normalizeMessage(appId, m))) })
+    } catch (e) {
+      return res.status(502).json({ error: e.message })
+    }
+  }
+
+  // ── WRITE: reply | status ────────────────────────────────────────────────────
+  if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
+  let change
+  if (op === 'reply') {
+    change = buildTicketReply(appId, { ticketRaw: ticket.raw, body, actorEmail: member.email, actorName: 'ACACIA Soporte' })
+  } else if (op === 'status') {
+    change = buildTicketStatus(appId, { ticketRaw: ticket.raw, status })
+  } else {
+    return res.status(400).json({ error: `op desconocida: ${op}` })
+  }
+  if (change.error) return res.status(400).json({ error: change.error })
+
+  const { data: app, error } = await supabaseAdmin.from('apps').select('*').eq('id', appId).maybeSingle()
+  if (error) return res.status(500).json({ error: error.message })
+  if (!app) return res.status(404).json({ error: 'app no encontrada' })
+
+  try {
+    const { entity, id, patch, messageEntity, message, appendField, appendItem, currentArray } = change
+    await callBridge(app, 'tickets.update', { entity, id, patch, messageEntity, message, appendField, appendItem, currentArray })
+    let resync = null
+    try { resync = await syncTicketsForApp(app) } catch (e) { resync = { error: e.message } }
+    await audit('control:ticket-action', {
+      actor: member.user_id, actor_email: member.email, target_app: appId, target_id: String(ticketExternalId),
+      payload: { op, status: status ?? null, patch },
+    })
+    return res.status(200).json({ ok: true, op, resync })
+  } catch (e) {
+    return res.status(502).json({ error: e.message })
+  }
+}
