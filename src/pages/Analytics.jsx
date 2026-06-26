@@ -2,10 +2,35 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
+import { webKpis } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 
 const STATUS_LABEL = { active: 'Activas', trial: 'En prueba', view_only: 'Solo lectura', past_due: 'Vencidas', canceled: 'Canceladas', desconocido: 'Sin estado' }
 const STATUS_BAR = { active: 'bg-emerald-500', trial: 'bg-brand', view_only: 'bg-amber-400', past_due: 'bg-red-400', canceled: 'bg-ink-faint', desconocido: 'bg-ink-faint' }
+const fmt = (n) => (typeof n === 'number' ? n.toLocaleString('es-MX') : '—')
+
+// Dependency-free inline sparkline.
+function Sparkline({ values, w = 116, h = 28, color = '#3b6ef8' }) {
+  const pts = (values ?? []).filter((v) => typeof v === 'number')
+  if (pts.length < 2) return <span className="text-[11px] text-ink-faint">faltan días</span>
+  const max = Math.max(...pts), min = Math.min(...pts), range = max - min || 1
+  const step = w / (pts.length - 1)
+  const d = pts.map((v, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)},${(h - 2 - ((v - min) / range) * (h - 4)).toFixed(1)}`).join(' ')
+  return (
+    <svg width={w} height={h} className="overflow-visible" aria-hidden="true">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function Delta({ values }) {
+  const pts = (values ?? []).filter((v) => typeof v === 'number')
+  if (pts.length < 2) return null
+  const d = pts[pts.length - 1] - pts[pts.length - 2]
+  if (d === 0) return <span className="text-[11px] text-ink-faint">=</span>
+  const up = d > 0
+  return <span className={`text-[11px] font-medium ${up ? 'text-emerald-600' : 'text-red-500'}`}>{up ? '▲' : '▼'} {fmt(Math.abs(d))}</span>
+}
 
 function Bars({ title, rows, total, colorFor }) {
   return (
@@ -29,9 +54,25 @@ function Bars({ title, rows, total, colorFor }) {
   )
 }
 
+// Build latest snapshot + per-app/metric daily series from usage_daily rows.
+function buildUsage(rows, appName) {
+  if (!rows.length) return { day: null, byApp: {}, series: {}, days: 0 }
+  const dayset = [...new Set(rows.map((r) => r.day))].sort()
+  const day = dayset[dayset.length - 1]
+  const byApp = {}, series = {}
+  for (const r of rows) {
+    if (r.day === day) (byApp[r.app_id] ??= { name: appName[r.app_id] ?? r.app_id, metrics: [] }).metrics.push({ metric: r.metric, value: r.value })
+    const s = (series[r.app_id] ??= {})
+    ;(s[r.metric] ??= []).push({ day: r.day, value: r.value })
+  }
+  for (const app of Object.values(series)) for (const k in app) app[k].sort((a, b) => a.day.localeCompare(b.day))
+  return { day, byApp, series, days: dayset.length }
+}
+
 export function Analytics() {
   const [data, setData] = useState(null)
-  const [usage, setUsage] = useState(null) // { day, byApp: {app_id: {name, metrics:[{metric,value}]}} }
+  const [usage, setUsage] = useState(null)
+  const [web, setWeb] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -44,19 +85,12 @@ export function Analytics() {
       const appName = Object.fromEntries(apps.map((a) => [a.id, a.name]))
       setData(summarizePortfolio({ apps, licenses: l.data ?? [], tenants: t.data ?? [] }))
 
-      // Product usage: latest day's snapshot from usage_daily.
       supabase.from('usage_daily').select('app_id, metric, value, day').is('tenant_id', null)
-        .order('day', { ascending: false }).limit(500)
-        .then(({ data: u }) => {
-          if (!u?.length) { setUsage({ day: null, byApp: {} }); return }
-          const day = u[0].day
-          const byApp = {}
-          for (const r of u.filter((x) => x.day === day)) {
-            (byApp[r.app_id] ??= { name: appName[r.app_id] ?? r.app_id, metrics: [] }).metrics.push({ metric: r.metric, value: r.value })
-          }
-          setUsage({ day, byApp })
-        })
+        .order('day', { ascending: true }).limit(3000)
+        .then(({ data: u }) => setUsage(buildUsage(u ?? [], appName)))
     }).catch((e) => setError(e.message))
+
+    webKpis().then(setWeb).catch(() => setWeb({ totals: { visits30: 0, visitors30: 0 }, top: [], series: [] }))
   }, [])
 
   const maxTenants = useMemo(() => Math.max(1, ...(data?.byApp ?? []).map((a) => a.tenants)), [data])
@@ -67,7 +101,7 @@ export function Analytics() {
   const t = data.totals
   return (
     <div>
-      <PageHeader title="Analítica" subtitle="Uso y consumo del portafolio — licencias y tenants en vivo." />
+      <PageHeader title="Analítica" subtitle="Uso, consumo y tráfico del portafolio — tendencias en vivo." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Licencias" value={t.licenses} hint={`${t.tenants} tenants`} />
@@ -81,24 +115,68 @@ export function Analytics() {
         <Bars title="Licencias por plan" rows={data.byPlan} total={t.licenses} />
       </div>
 
+      {/* Tendencia de uso de producto */}
       <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
-        <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Vencimientos próximos</h3>
-        <p className="mt-1 text-xs text-ink-faint">Renovaciones y fines de prueba en los próximos 45 días.</p>
-        <div className="mt-4 space-y-2">
-          {data.upcoming.length === 0 && <p className="text-sm text-ink-faint">Nada por vencer pronto. 🎉</p>}
-          {data.upcoming.slice(0, 8).map((u, i) => (
-            <div key={i} className="flex items-center justify-between gap-3 text-sm">
-              <span className="flex items-center gap-2 min-w-0">
-                <span className={`h-1.5 w-1.5 rounded-full ${u.type === 'fin de prueba' ? 'bg-amber-400' : 'bg-brand'}`} />
-                <span className="font-medium text-ink truncate">{u.name}</span>
-                <span className="text-ink-mute">· {u.type}</span>
-              </span>
-              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
-                {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
-              </span>
-            </div>
-          ))}
+        <div className="flex items-baseline justify-between">
+          <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Tendencia de uso de producto</h3>
+          {usage?.day && <span className="text-xs text-ink-faint">{usage.days} día(s) · al {usage.day}</span>}
         </div>
+        {usage && Object.keys(usage.byApp).length > 0 ? (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {Object.entries(usage.byApp).map(([id, a]) => (
+              <div key={id} className="rounded-lg border border-hair p-4">
+                <div className="font-medium text-ink">{a.name}</div>
+                <div className="mt-3 space-y-2.5">
+                  {a.metrics.map((m) => {
+                    const vals = (usage.series[id]?.[m.metric] ?? []).map((p) => p.value)
+                    return (
+                      <div key={m.metric} className="flex items-center justify-between gap-3">
+                        <span className="flex items-baseline gap-1.5 min-w-0">
+                          <span className="font-display font-semibold text-ink">{fmt(m.value)}</span>
+                          <span className="text-xs text-ink-mute truncate">{m.metric}</span>
+                          <Delta values={vals} />
+                        </span>
+                        <Sparkline values={vals} />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-ink-faint">
+            Sin snapshots aún. El cron <code className="font-mono text-ink">sync-usage</code> acumula uno por día; las tendencias aparecen con ≥2 días.
+          </p>
+        )}
+      </div>
+
+      {/* Tráfico web */}
+      <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
+        <div className="flex items-baseline justify-between">
+          <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Tráfico web</h3>
+          <span className="text-xs text-ink-faint">analítica propia · 30 días</span>
+        </div>
+        {web && web.totals?.visits30 > 0 ? (
+          <>
+            <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+              <span className="text-sm"><span className="font-display text-2xl font-semibold text-ink">{fmt(web.totals.visits30)}</span> <span className="text-ink-mute">visitas</span></span>
+              <span className="text-sm"><span className="font-display text-2xl font-semibold text-ink">{fmt(web.totals.visitors30)}</span> <span className="text-ink-mute">visitantes</span></span>
+              <span className="ml-auto"><Sparkline values={(web.series ?? []).map((p) => p.visits)} w={180} h={36} /></span>
+            </div>
+            <div className="mt-4">
+              <div className="text-xs uppercase tracking-wide text-ink-mute border-b border-hair pb-1.5">Rutas más visitadas</div>
+              {(web.top ?? []).map((r) => (
+                <div key={r.path} className="flex items-center justify-between gap-3 border-b border-hair last:border-0 py-1.5 text-sm">
+                  <span className="font-mono text-ink truncate">{r.path}</span>
+                  <span className="shrink-0 text-ink-mute"><span className="font-display font-semibold text-ink">{fmt(r.visits30)}</span> · {fmt(r.visitors30)} únicos</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-ink-faint">Aún sin visitas. El pixel en acaciaco.com.mx las registra; aquí verás rutas top y tendencia.</p>
+        )}
       </div>
 
       <div className="mt-6 rounded-xl border border-hair bg-paper-card overflow-hidden">
@@ -126,36 +204,27 @@ export function Analytics() {
       </div>
 
       <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
-        <div className="flex items-baseline justify-between">
-          <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Uso de producto</h3>
-          {usage?.day && <span className="text-xs text-ink-faint">snapshot {usage.day}</span>}
+        <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Vencimientos próximos</h3>
+        <p className="mt-1 text-xs text-ink-faint">Renovaciones y fines de prueba en los próximos 45 días.</p>
+        <div className="mt-4 space-y-2">
+          {data.upcoming.length === 0 && <p className="text-sm text-ink-faint">Nada por vencer pronto. 🎉</p>}
+          {data.upcoming.slice(0, 8).map((u, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`h-1.5 w-1.5 rounded-full ${u.type === 'fin de prueba' ? 'bg-amber-400' : 'bg-brand'}`} />
+                <span className="font-medium text-ink truncate">{u.name}</span>
+                <span className="text-ink-mute">· {u.type}</span>
+              </span>
+              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
+                {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
+              </span>
+            </div>
+          ))}
         </div>
-        {usage && Object.keys(usage.byApp).length > 0 ? (
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {Object.entries(usage.byApp).map(([id, a]) => (
-              <div key={id} className="rounded-lg border border-hair p-4">
-                <div className="font-medium text-ink">{a.name}</div>
-                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
-                  {a.metrics.map((m) => (
-                    <span key={m.metric} className="text-sm">
-                      <span className="font-display font-semibold text-ink">{m.value.toLocaleString('es-MX')}</span>
-                      <span className="ml-1 text-ink-mute">{m.metric}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-ink-faint">
-            Sin snapshot aún. Corre el cron <code className="font-mono text-ink">sync-usage</code> (necesita
-            la función <code className="font-mono text-ink">acaciaControl</code> con <code className="font-mono text-ink">usage.summary</code> desplegada en cada app).
-          </p>
-        )}
       </div>
 
       <p className="mt-6 text-xs text-ink-faint">
-        Próximas capas: tráfico web (PostHog), costos de infraestructura por app.
+        Próxima capa: consumo por tenant (para upsell / soporte proactivo) — requiere una acción nueva del puente.
       </p>
     </div>
   )
