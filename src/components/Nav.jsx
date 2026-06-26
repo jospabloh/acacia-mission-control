@@ -9,6 +9,13 @@ function SectionLabel({ children }) {
   return <div className="px-3 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">{children}</div>
 }
 
+// Sidebar app groups mirror the dashboard categories.
+const APP_SECTIONS = [
+  { key: 'app', label: 'Apps · SaaS' },
+  { key: 'freeware', label: 'Freeware' },
+  { key: 'site', label: 'Sitios web' },
+]
+
 export function Nav() {
   const { role } = useAuth()
   const [apps, setApps] = useState([])
@@ -41,13 +48,21 @@ export function Nav() {
         </NavLink>
       ))}
 
-      <SectionLabel>Apps</SectionLabel>
-      {apps.map((a) => (
-        <NavLink key={a.id} to={`/apps/${a.id}`} className={linkClass}>
-          <span className={`h-2 w-2 rounded-full ml-1 ${a.status === 'active' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-          <span className="flex-1">{a.name}</span>
-        </NavLink>
-      ))}
+      {APP_SECTIONS.map(({ key, label }) => {
+        const items = apps.filter((a) => (a.category || 'app') === key)
+        if (items.length === 0) return null
+        return (
+          <div key={key}>
+            <SectionLabel>{label}</SectionLabel>
+            {items.map((a) => (
+              <NavLink key={a.id} to={`/apps/${a.id}`} className={linkClass}>
+                <span className={`h-2 w-2 rounded-full ml-1 ${a.status === 'active' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                <span className="flex-1 truncate">{a.name}</span>
+              </NavLink>
+            ))}
+          </div>
+        )
+      })}
       {apps.length === 0 && <div className="px-3 text-xs text-ink-faint">Sin apps en el registro</div>}
     </nav>
   )
