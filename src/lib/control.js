@@ -53,10 +53,10 @@ export function usageByTenant(appId) {
 
 // Read one ticket's conversation thread (uniform shape). Read-only.
 export function ticketThread(appId, ticketExternalId) {
-  return postControl('/api/control/ticket-thread', { appId, ticketExternalId })
+  return postControl('/api/control/tickets', { appId, ticketExternalId, op: 'thread' })
 }
 
 // WRITE: reply to a ticket (op:'reply', body) or change its status (op:'status', status).
 export function ticketAction(appId, ticketExternalId, op, extra = {}) {
-  return postControl('/api/control/ticket-action', { appId, ticketExternalId, op, ...extra })
+  return postControl('/api/control/tickets', { appId, ticketExternalId, op, ...extra })
 }

@@ -197,7 +197,7 @@ export function Analytics() {
           </div>
         ) : (
           <p className="mt-3 text-sm text-ink-faint">
-            Sin snapshots aún. El cron <code className="font-mono text-ink">sync-usage</code> acumula uno por día; las tendencias aparecen con ≥2 días.
+            Sin snapshots aún. El cron <code className="font-mono text-ink">sync</code> acumula uno por día; las tendencias aparecen con ≥2 días.
           </p>
         )}
       </div>
