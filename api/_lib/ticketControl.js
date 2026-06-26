@@ -21,7 +21,35 @@ const APPS = {
     thread: {
       mode: 'message', messageEntity: 'SupportTicketMessage', fkField: 'ticket_id',
       bodyField: 'body', roleField: 'author_role', staffRole: 'owner', customerRole: 'tenant',
-      nameField: 'author_name', tsField: 'created_date',
+      nameField: 'author_name', tsField: 'created_date', rich: true,
+    },
+  },
+  // StockFlow & FlowFin mirror the puntos model (SupportTicket + SupportTicketMessage,
+  // owner/tenant roles, rich counters) — only the tenant FK differs.
+  stockflow: {
+    entity: 'SupportTicket', tenantField: 'business_id',
+    subjectField: 'subject', statusField: 'status', priorityField: 'priority',
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
+    openStatus: 'open', inProgressStatus: 'in_progress',
+    resolvedField: 'resolved_at', closedField: 'closed_at',
+    thread: {
+      mode: 'message', messageEntity: 'SupportTicketMessage', fkField: 'ticket_id',
+      bodyField: 'body', roleField: 'author_role', staffRole: 'owner', customerRole: 'tenant',
+      nameField: 'author_name', tsField: 'created_date', rich: true,
+    },
+  },
+  flowfin: {
+    entity: 'SupportTicket', tenantField: 'family_id',
+    subjectField: 'subject', statusField: 'status', priorityField: 'priority',
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
+    openStatus: 'open', inProgressStatus: 'in_progress',
+    resolvedField: 'resolved_at', closedField: 'closed_at',
+    thread: {
+      mode: 'message', messageEntity: 'SupportTicketMessage', fkField: 'ticket_id',
+      bodyField: 'body', roleField: 'author_role', staffRole: 'owner', customerRole: 'tenant',
+      nameField: 'author_name', tsField: 'created_date', rich: true,
     },
   },
   liuma: {
@@ -89,7 +117,8 @@ export function buildTicketReply(appId, { ticketRaw, body, actorEmail, actorName
     const message = { [t.fkField]: id, [t.roleField]: t.staffRole, [t.bodyField]: text }
     // Denormalized tenant scope the message entities require.
     message[cfg.tenantField] = raw[cfg.tenantField]
-    if (appId === 'puntos') {
+    if (t.rich) {
+      // puntos / stockflow / flowfin: full thread metadata + unread/counter fields.
       message.author_email = actorEmail || null
       message.author_name = actorName || STAFF_NAME
       message.is_internal_note = false
