@@ -11,9 +11,12 @@ const RUMBO = { id: 'rumbo', config: { license_entity: 'TenantLicense', field_ma
   tenant_external_id: 'id', name: 'tenant_name', plan: 'plan', status: 'status',
   seats: 'max_drivers', trial_ends_at: 'trial_ends_at', current_period_end: 'current_period_end' } } }
 
+// Mirrors migration 0010: LIUMA's authoritative plan/expiry are license_tier /
+// license_expires_at (licenseModel.js), not the vestigial subscription_plan /
+// subscription_end_date.
 const LIUMA = { id: 'liuma', config: { license_entity: 'SchoolSubscription', field_map: {
-  tenant_external_id: 'school_id', name: 'school_id', plan: 'subscription_plan', status: 'subscription_status',
-  seats: 'licensed_student_limit', trial_ends_at: 'trial_end_date', current_period_end: 'subscription_end_date' } } }
+  tenant_external_id: 'school_id', name: 'school_id', plan: 'license_tier', status: 'subscription_status',
+  seats: 'licensed_student_limit', trial_ends_at: 'trial_end_date', current_period_end: 'license_expires_at' } } }
 
 test('maps a Puntos+ Business record', () => {
   const { tenant, license } = mapLicenseRecord({
@@ -43,12 +46,16 @@ test('maps a Rumbo TenantLicense (record id is the tenant id)', () => {
 
 test('maps a LIUMA SchoolSubscription (tenant id = school_id, distinct from license id)', () => {
   const { tenant, license } = mapLicenseRecord({
-    id: 'sub1', school_id: 'sch7', subscription_status: 'active', subscription_plan: 'standard',
-    licensed_student_limit: 300, subscription_end_date: '2027-01-15T00:00:00Z',
+    id: 'sub1', school_id: 'sch7', subscription_status: 'active', license_tier: 'growth',
+    subscription_plan: 'trial', // vestigial — must be ignored in favor of license_tier
+    licensed_student_limit: 300, license_expires_at: '2027-01-15T00:00:00Z',
+    subscription_end_date: null, // never written by the app
   }, LIUMA)
   assert.equal(tenant.external_id, 'sch7')      // tenant keyed by school
   assert.equal(license.external_id, 'sub1')     // license keyed by its own id
   assert.equal(license.seats, 300)
+  assert.equal(license.plan, 'growth')          // license_tier, not subscription_plan ('trial')
+  assert.equal(license.current_period_end, '2027-01-15T00:00:00.000Z') // license_expires_at
 })
 
 test('falls back to candidate field names without a field_map', () => {

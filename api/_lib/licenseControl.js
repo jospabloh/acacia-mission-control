@@ -14,36 +14,47 @@
 //                  'full' → also stamp last_payment_confirmed_at/by/period/reference
 //                           (FlowFin & LIUMA model this explicitly);
 //                  'rumbo'→ stamp last_payment_at + mirror expiry into renews_at.
+//   dayConvention— how the new expiry day is chosen, to MATCH each app's own
+//                  renewal logic (verified against the app source):
+//                  'first_of_month' → land on the 1st of (base month + N). FlowFin
+//                     `confirmLicensePayment.calculateExpiry` + LIUMA
+//                     `licenseModel.calculateExpiry` both do this (Mercado Pago
+//                     bills on the 1st), so MC must too or licenses expire a few
+//                     days before the next auto-charge.
+//                  'preserve_day'   → keep the day-of-month, add N months. Matches
+//                     StockFlow `processMonthlyRenewal` and Rumbo `licensesAdmin`.
+//   activeExtra  — extra fields to also flip to 'active' on reactivate/confirm
+//                  (puntos has a separate operativo `status` its renew also sets).
 const APPS = {
   flowfin: {
     entity: 'Family', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['home', 'family_plus', 'circle'],
-    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'full' },
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'full', dayConvention: 'first_of_month' },
   },
   stockflow: {
     entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['start', 'growth', 'pro'],
-    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref' },
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
   },
   rumbo: {
     entity: 'TenantLicense', statusField: 'status', planField: 'plan',
     statuses: { active: 'active', suspended: 'suspended' }, // suspend auto-blocks write_access
     plans: ['trial', 'starter', 'pro', 'enterprise'],
-    billing: { expiryField: 'current_period_end', trialField: 'trial_ends_at', dateFormat: 'date', payment: 'rumbo' },
+    billing: { expiryField: 'current_period_end', trialField: 'trial_ends_at', dateFormat: 'date', payment: 'rumbo', dayConvention: 'preserve_day' },
   },
   liuma: {
     entity: 'SchoolSubscription', statusField: 'subscription_status', planField: 'license_tier',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['start', 'growth', 'plus'],
-    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_date', dateFormat: 'datetime', payment: 'full' },
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_date', dateFormat: 'datetime', payment: 'full', dayConvention: 'first_of_month' },
   },
   puntos: {
     entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['starter', 'growth', 'pro', 'enterprise'],
-    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref' },
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day', activeExtra: { status: 'active' } },
     // puntos keeps an append-only LicenseEvent audit; mirror MC actions into it.
     audit: { entity: 'LicenseEvent', idField: 'business_id', eventType: {
       reactivate: 'reactivated', suspend: 'suspended', view_only: 'view_only', set_plan: 'plan_changed',
@@ -84,11 +95,17 @@ function addMonths(base, months) {
 
 // Compute the new expiry for a +N-month renewal. A renewal stacks: if the current
 // expiry is still in the future, extend from it; otherwise start from today (no
-// retroactive credit). Pass `now` explicitly so callers/tests are deterministic.
-export function computeRenewalExpiry({ currentExpiry, periodMonths = 1, dateFormat = 'datetime', now = new Date() } = {}) {
+// retroactive credit). `dayConvention` matches the target app's own renewal math
+// (see APPS.billing). Pass `now` explicitly so callers/tests are deterministic.
+export function computeRenewalExpiry({ currentExpiry, periodMonths = 1, dateFormat = 'datetime', dayConvention = 'preserve_day', now = new Date() } = {}) {
   const cur = currentExpiry ? new Date(currentExpiry) : null
   const base = cur && !Number.isNaN(cur.getTime()) && cur.getTime() > now.getTime() ? cur : now
-  const next = addMonths(base, periodMonths)
+  let next = addMonths(base, periodMonths)
+  if (dayConvention === 'first_of_month') {
+    // Land on the 1st of the resulting month at 00:00 UTC — mirrors FlowFin/LIUMA
+    // calculateExpiry (Mercado Pago bills on the 1st).
+    next = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth(), 1, 0, 0, 0, 0))
+  }
   return dateFormat === 'date' ? next.toISOString().slice(0, 10) : next.toISOString()
 }
 
@@ -107,6 +124,8 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
     if (!val) return { error: `'${op}' no aplica a ${appId}` }
     patch[cfg.statusField] = val
     toStatus = val
+    // Reactivation should also clear a second operativo gate (puntos `status`).
+    if (op === 'reactivate' && cfg.billing?.activeExtra) Object.assign(patch, cfg.billing.activeExtra)
   } else if (op === 'set_plan') {
     if (!plan || !cfg.plans.includes(plan)) return { error: `plan inválido para ${appId}: ${plan}` }
     patch[cfg.planField] = plan
@@ -115,11 +134,13 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
     if (!b) return { error: `${appId} no soporta confirmación de pago` }
     const months = Number(periodMonths) || 1
     const when = now ? new Date(now) : new Date()
-    newExpiry = computeRenewalExpiry({ currentExpiry, periodMonths: months, dateFormat: b.dateFormat, now: when })
+    newExpiry = computeRenewalExpiry({ currentExpiry, periodMonths: months, dateFormat: b.dateFormat, dayConvention: b.dayConvention, now: when })
     // A confirmed payment always lands the tenant on 'active' with a fresh expiry.
     patch[cfg.statusField] = cfg.statuses.active
     patch[b.expiryField] = newExpiry
     toStatus = cfg.statuses.active
+    // Some apps gate on a second field too (puntos operativo `status`); mirror it.
+    if (b.activeExtra) Object.assign(patch, b.activeExtra)
     const ref = paymentReference ? String(paymentReference) : undefined
     const period = when.toISOString().slice(0, 7) // YYYY-MM
     if (b.payment === 'ref') {
