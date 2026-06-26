@@ -44,3 +44,8 @@ export function sendMessage(payload) {
 export function webKpis() {
   return postControl('/api/web-kpis', {})
 }
+
+// Per-tenant consumption for one app (counts only). Read-only.
+export function usageByTenant(appId) {
+  return postControl('/api/control/usage-by-tenant', { appId })
+}
