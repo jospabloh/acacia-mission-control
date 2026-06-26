@@ -76,6 +76,34 @@ export function renderMessage(type, ctx) {
     }
   }
 
+  if (type === 'renewal_fyi') {
+    // Personal heads-up for tenants ON a recurring plan: the Mercado Pago charge
+    // runs automatically on the 1st — nothing for them to do. Reassuring, FYI tone.
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tu plan de ${app.name} se renueva solo el día 1 ✅`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Solo un aviso rápido y personal: tu plan de <span class="hi">${esc(app.name)}</span> tiene <strong>cobro automático en Mercado Pago</strong>, así que el <strong>día 1</strong> se renueva solo. No necesitas hacer nada — <strong>${esc(app.value)}</strong> sigue sin interrupciones.</p>
+${ctx.date ? `<p>Tu siguiente período queda cubierto hasta el <strong>${fmtDate(ctx.date)}</strong>.</p>` : ''}
+<p>Si en algún momento quieres revisar tu plan o tu método de pago, respóndenos este correo y con gusto te ayudamos.</p>
+<p>Gracias por seguir con nosotros.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'trial_offer') {
+    // For tenants NOT on a plan (trial ended / never subscribed): invite them to
+    // subscribe. Mercado Pago handles the recurring charge once they activate.
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}activa tu plan de ${app.name} y sigue sin límites 🌿`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Esperamos que <span class="hi">${esc(app.name)}</span> te haya sido útil. Para seguir aprovechando <strong>${esc(app.value)}</strong> sin interrupciones, te invitamos a <strong>activar tu plan</strong>.</p>
+<p>La suscripción es mensual por <strong>Mercado Pago</strong>: se activa al instante y se renueva sola cada mes (la cancelas cuando quieras).</p>
+${ctx.body ? paras(ctx.body) : ''}
+<p>¿Lista/o para activarlo? Responde este correo o escríbele a tu ejecutivo ACACIA y lo dejamos andando hoy mismo.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
   if (type === 'maintenance') {
     const m = ctx.maint ?? {}
     const win = [m.date && fmtDate(m.date), m.time && `a las ${esc(m.time)}`, m.duration && `(~${esc(m.duration)})`].filter(Boolean).join(' ')

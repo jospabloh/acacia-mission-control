@@ -14,14 +14,25 @@ export default async function handler(req, res) {
   const member = await requireMember(req, res, 'admin')
   if (!member) return
 
-  const { appId, licenseExternalId, op, plan } = req.body ?? {}
+  const { appId, licenseExternalId, op, plan, periodMonths, paymentReference } = req.body ?? {}
   if (!appId || !licenseExternalId || !op) return res.status(400).json({ error: 'falta appId/licenseExternalId/op' })
   if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
 
   const cfg = licenseControlFor(appId)
   if (!cfg) return res.status(400).json({ error: `app ${appId} no soporta control de licencia` })
 
-  const change = buildLicenseChange(appId, op, { plan, actorEmail: member.email })
+  // For a payment confirmation we extend from the current expiry on record. Read
+  // it server-side from the bodega (don't trust the client) so the renewal stacks
+  // correctly: future expiry → extend it; expired/trial → start from today.
+  let currentExpiry = null
+  if (op === 'confirm_payment') {
+    const { data: lic } = await supabaseAdmin
+      .from('licenses').select('current_period_end')
+      .eq('app_id', appId).eq('external_id', licenseExternalId).maybeSingle()
+    currentExpiry = lic?.current_period_end ?? null
+  }
+
+  const change = buildLicenseChange(appId, op, { plan, actorEmail: member.email, currentExpiry, periodMonths, paymentReference })
   if (change.error) return res.status(400).json({ error: change.error })
   if (change.log) change.log.row[cfg.audit.idField] = licenseExternalId // fill the audit record id
 
@@ -39,9 +50,9 @@ export default async function handler(req, res) {
 
     await audit('control:license-action', {
       actor: member.user_id, actor_email: member.email, target_app: appId, target_id: licenseExternalId,
-      payload: { op, plan: plan ?? null, label: OP_LABEL[op] ?? op, patch: change.patch },
+      payload: { op, plan: plan ?? null, label: OP_LABEL[op] ?? op, patch: change.patch, newExpiry: change.newExpiry ?? null },
     })
-    return res.status(200).json({ ok: true, op, applied: !!(out?.ok ?? out?.updated), resync })
+    return res.status(200).json({ ok: true, op, applied: !!(out?.ok ?? out?.updated), newExpiry: change.newExpiry ?? null, resync })
   } catch (e) {
     return res.status(502).json({ error: e.message })
   }
