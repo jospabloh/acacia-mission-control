@@ -6,10 +6,13 @@ import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
 // Apps that persist tickets + their valid status values (mirror of
 // api/_lib/ticketControl.js). stockflow (email-only) and flowfin (none) are absent.
 const TICKET_APPS = [
-  { id: 'puntos', name: 'Puntos+' }, { id: 'rumbo', name: 'Rumbo' }, { id: 'liuma', name: 'LIUMA' },
+  { id: 'puntos', name: 'Puntos+' }, { id: 'stockflow', name: 'StockFlow' }, { id: 'flowfin', name: 'FlowFin' },
+  { id: 'rumbo', name: 'Rumbo' }, { id: 'liuma', name: 'LIUMA' },
 ]
 const STATUSES = {
   puntos: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
+  stockflow: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
+  flowfin: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
   rumbo: ['open', 'in_progress', 'resolved', 'closed'],
   liuma: ['OPEN', 'IN_PROGRESS', 'WAITING_USER', 'ESCALATED', 'RESOLVED', 'CLOSED'],
 }
@@ -100,7 +103,7 @@ export function Support() {
 
   return (
     <div>
-      <PageHeader title="Soporte" subtitle="Bandeja unificada de tickets de Puntos+, Rumbo y LIUMA. Responde y cambia el estado sin entrar a cada app.">
+      <PageHeader title="Soporte" subtitle="Bandeja unificada de tickets de las 5 apps. Responde y cambia el estado sin entrar a cada una.">
         <button onClick={syncAll} disabled={syncing}
           className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">
           {syncing ? 'Sincronizando…' : 'Sincronizar'}
@@ -126,7 +129,7 @@ export function Support() {
         <p className="text-sm text-ink-mute">Cargando…</p>
       ) : rows.length === 0 ? (
         <EmptyState icon="support" title="Aún no hay tickets sincronizados" phase={3}>
-          Pulsa <strong>Sincronizar</strong> para traer los tickets de Puntos+, Rumbo y LIUMA. (Requiere el puente <code className="font-mono">acaciaControl</code> desplegado.)
+          Pulsa <strong>Sincronizar</strong> para traer los tickets de las apps. (Requiere el puente <code className="font-mono">acaciaControl</code> desplegado.)
         </EmptyState>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">

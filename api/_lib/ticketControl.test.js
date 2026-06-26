@@ -1,15 +1,41 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketControlFor, ticketApps } from './ticketControl.js'
+import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketApps } from './ticketControl.js'
 
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
 
-// ── only the 3 ticket apps are modeled ───────────────────────────────────────
-test('only puntos/rumbo/liuma have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['liuma', 'puntos', 'rumbo'])
-  assert.equal(ticketControlFor('stockflow'), null)
-  assert.equal(ticketControlFor('flowfin'), null)
+// ── all 5 apps now persist tickets ───────────────────────────────────────────
+test('all 5 portfolio apps have ticket configs', () => {
+  assert.deepEqual(ticketApps().sort(), ['flowfin', 'liuma', 'puntos', 'rumbo', 'stockflow'])
+})
+
+// ── stockflow / flowfin mirror the puntos rich model with a different tenant FK ─
+test('stockflow reply: business_id message + rich counters', () => {
+  const raw = { id: 's1', business_id: 'b3', status: 'open', messages_count: 0 }
+  const out = buildTicketReply('stockflow', { ticketRaw: raw, body: 'hola', actorEmail: 'op@acacia.mx', now: NOW })
+  assert.equal(out.message.business_id, 'b3')
+  assert.equal(out.message.author_role, 'owner')
+  assert.equal(out.message.is_internal_note, false)
+  assert.equal(out.patch.status, 'in_progress')
+  assert.equal(out.patch.messages_count, 1)
+  assert.equal(out.patch.unread_for_tenant, true)
+  assert.equal(out.patch.first_response_at, NOW_ISO)
+})
+
+test('flowfin reply: family_id message + rich counters', () => {
+  const raw = { id: 'f1', family_id: 'fam5', status: 'waiting_customer', messages_count: 4, first_response_at: '2026-01-01T00:00:00Z' }
+  const out = buildTicketReply('flowfin', { ticketRaw: raw, body: 'seguimiento', now: NOW })
+  assert.equal(out.message.family_id, 'fam5')
+  assert.equal(out.message.author_role, 'owner')
+  assert.equal(out.patch.status, 'waiting_customer')          // not open → unchanged
+  assert.equal(out.patch.messages_count, 5)
+  assert.equal(out.patch.first_response_at, '2026-01-01T00:00:00Z') // preserved
+})
+
+test('stockflow/flowfin status resolved/closed stamp timestamps', () => {
+  assert.equal(buildTicketStatus('stockflow', { ticketRaw: { id: 's1', status: 'open' }, status: 'resolved', now: NOW }).patch.resolved_at, NOW_ISO)
+  assert.equal(buildTicketStatus('flowfin', { ticketRaw: { id: 'f1', status: 'open' }, status: 'closed', now: NOW }).patch.closed_at, NOW_ISO)
 })
 
 // ── puntos reply: message entity + counters + first response + status bump ──
