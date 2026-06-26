@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth/useAuth.js'
+import { getRememberedIdentity, clearRememberedIdentity } from '../lib/lastIdentity.js'
 
 // Google sign-in is only shown once the provider is actually configured in
 // Supabase (Auth → Providers → Google) + a Google Cloud OAuth client exists.
@@ -44,11 +45,20 @@ function GoogleMark() {
 
 export function LoginGate({ children }) {
   const { loading, user, role, signInWithEmail, signInWithGoogle, signOut } = useAuth()
-  const [email, setEmail] = useState('')
+  // Welcome-back: remember the last operator (cosmetic) to greet them by name.
+  const [remembered, setRemembered] = useState(() => getRememberedIdentity())
+  const [useOther, setUseOther] = useState(false)
+  const [email, setEmail] = useState(remembered?.email || '')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const personalized = remembered && !useOther
+  const firstName = remembered?.name ? remembered.name.split(' ')[0] : null
+  const switchAccount = () => {
+    clearRememberedIdentity(); setRemembered(null); setUseOther(true)
+    setEmail(''); setPassword(''); setError(null)
+  }
 
   // Surface an OAuth error handed back in the URL (Supabase returns it in the hash).
   useEffect(() => {
@@ -148,55 +158,113 @@ export function LoginGate({ children }) {
                 </span>
               </span>
             </div>
-            <h1 className="mt-7 font-display text-2xl font-semibold text-ink tracking-tight">
-              Acceso de operador
-            </h1>
-            <p className="mt-1 text-sm text-ink-soft">
-              Centro de control del portafolio ACACIA.
-            </p>
-
-            {/* Google — primary path (shown only when the provider is configured) */}
-            {GOOGLE_ENABLED && (
+            {personalized ? (
+              /* ── Welcome back — premium, personalized ───────────────────── */
               <>
-                <button onClick={onGoogle} disabled={googleBusy || busy}
-                  className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
-                  {googleBusy
-                    ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
-                    : <><GoogleMark /> Continuar con Google</>}
-                </button>
-
-                <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-faint">
-                  <span className="h-px flex-1 bg-hair" /> o con tu correo <span className="h-px flex-1 bg-hair" />
+                <div className="mt-7 flex flex-col items-center text-center">
+                  {remembered.avatar ? (
+                    <img src={remembered.avatar} alt="" className="h-20 w-20 rounded-full object-cover ring-4 ring-brand/10" />
+                  ) : (
+                    <div className="grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-brand to-brand-deep text-3xl font-semibold text-white shadow-glow">
+                      {(remembered.name || remembered.email).trim().charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <h1 className="mt-5 font-display text-2xl font-semibold tracking-tight text-ink">
+                    ¡Bienvenido de nuevo{firstName ? `, ${firstName}` : ''}!
+                  </h1>
+                  {remembered.email && <p className="mt-1 text-sm text-ink-soft">{remembered.email}</p>}
                 </div>
+
+                {GOOGLE_ENABLED && (
+                  <button onClick={onGoogle} disabled={googleBusy || busy}
+                    className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
+                    {googleBusy
+                      ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
+                      : <><GoogleMark /> Continuar con Google</>}
+                  </button>
+                )}
+
+                <form onSubmit={onSubmit} className={`space-y-3 ${GOOGLE_ENABLED ? 'mt-4' : 'mt-7'}`}>
+                  {/* email is known — keep it for the form + password managers, hidden */}
+                  <input type="email" value={email} readOnly hidden autoComplete="username" />
+                  <label className="block">
+                    <span className="text-xs font-medium text-ink-soft">Contraseña</span>
+                    <input type="password" value={password} required autoFocus autoComplete="current-password"
+                      onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••"
+                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
+                  </label>
+
+                  {error && (
+                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
+                      <span aria-hidden="true" className="mt-px">⚠</span>
+                      <span>{error}</span>
+                    </p>
+                  )}
+
+                  <button type="submit" disabled={busy || googleBusy}
+                    className="w-full h-11 rounded-xl bg-brand text-white text-sm font-semibold shadow-glow hover:bg-brand-deep transition-colors disabled:opacity-60">
+                    {busy ? 'Entrando…' : `Continuar como ${firstName || 'mí'}`}
+                  </button>
+                  <button type="button" onClick={switchAccount}
+                    className="w-full pt-1 text-center text-sm font-medium text-ink-mute hover:text-ink transition">
+                    Usar otra cuenta
+                  </button>
+                </form>
+              </>
+            ) : (
+              /* ── Generic operator login ─────────────────────────────────── */
+              <>
+                <h1 className="mt-7 font-display text-2xl font-semibold text-ink tracking-tight">
+                  Acceso de operador
+                </h1>
+                <p className="mt-1 text-sm text-ink-soft">
+                  Centro de control del portafolio ACACIA.
+                </p>
+
+                {/* Google — primary path (shown only when the provider is configured) */}
+                {GOOGLE_ENABLED && (
+                  <>
+                    <button onClick={onGoogle} disabled={googleBusy || busy}
+                      className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
+                      {googleBusy
+                        ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
+                        : <><GoogleMark /> Continuar con Google</>}
+                    </button>
+
+                    <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-ink-faint">
+                      <span className="h-px flex-1 bg-hair" /> o con tu correo <span className="h-px flex-1 bg-hair" />
+                    </div>
+                  </>
+                )}
+
+                <form onSubmit={onSubmit} className={`space-y-3 ${GOOGLE_ENABLED ? '' : 'mt-6'}`}>
+                  <label className="block">
+                    <span className="text-xs font-medium text-ink-soft">Correo</span>
+                    <input type="email" value={email} required autoComplete="email"
+                      onChange={(e) => setEmail(e.target.value)} placeholder="tu@acaciaco.com.mx"
+                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-ink-soft">Contraseña</span>
+                    <input type="password" value={password} required autoComplete="current-password"
+                      onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••"
+                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
+                  </label>
+
+                  {error && (
+                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
+                      <span aria-hidden="true" className="mt-px">⚠</span>
+                      <span>{error}</span>
+                    </p>
+                  )}
+
+                  <button type="submit" disabled={busy || googleBusy}
+                    className="w-full h-11 rounded-xl bg-brand text-white text-sm font-semibold shadow-glow hover:bg-brand-deep transition-colors disabled:opacity-60">
+                    {busy ? 'Entrando…' : 'Entrar'}
+                  </button>
+                </form>
               </>
             )}
-
-            <form onSubmit={onSubmit} className={`space-y-3 ${GOOGLE_ENABLED ? '' : 'mt-6'}`}>
-              <label className="block">
-                <span className="text-xs font-medium text-ink-soft">Correo</span>
-                <input type="email" value={email} required autoComplete="email"
-                  onChange={(e) => setEmail(e.target.value)} placeholder="tu@acaciaco.com.mx"
-                  className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-medium text-ink-soft">Contraseña</span>
-                <input type="password" value={password} required autoComplete="current-password"
-                  onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••"
-                  className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
-              </label>
-
-              {error && (
-                <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
-                  <span aria-hidden="true" className="mt-px">⚠</span>
-                  <span>{error}</span>
-                </p>
-              )}
-
-              <button type="submit" disabled={busy || googleBusy}
-                className="w-full h-11 rounded-xl bg-brand text-white text-sm font-semibold shadow-glow hover:bg-brand-deep transition-colors disabled:opacity-60">
-                {busy ? 'Entrando…' : 'Entrar'}
-              </button>
-            </form>
           </div>
         </div>
 
