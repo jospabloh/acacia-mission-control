@@ -8,6 +8,7 @@ import { requireMember } from '../_lib/requireMember.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
 import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
+import { probeAppHealth } from '../_lib/sync/syncHealth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
@@ -23,10 +24,17 @@ export default async function handler(req, res) {
   const { data: app, error } = await supabaseAdmin.from('apps').select('*').eq('id', appId).maybeSingle()
   if (error) return res.status(500).json({ error: error.message })
   if (!app) return res.status(404).json({ error: 'app no encontrada' })
-  if (app.backend !== 'base44') return res.status(400).json({ error: 'esta app no tiene puente operable' })
+
+  // Health works for any backend (bridge ping or HTTP probe). The data syncs
+  // need the Base44 bridge.
+  const dataKinds = ['licenses', 'usage', 'tickets'].filter((k) => kinds.includes(k))
+  if (dataKinds.length && app.backend !== 'base44') {
+    return res.status(400).json({ error: 'esta app no tiene puente operable' })
+  }
 
   const result = {}
   try {
+    if (kinds.includes('health')) result.health = await probeAppHealth(app)
     if (kinds.includes('licenses')) result.licenses = await syncLicensesForApp(app)
     if (kinds.includes('usage')) result.usage = await syncUsageForApp(app, new Date().toISOString().slice(0, 10))
     if (kinds.includes('tickets')) result.tickets = await syncTicketsForApp(app)
