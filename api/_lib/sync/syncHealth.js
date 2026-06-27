@@ -28,16 +28,22 @@ async function probeHttp(url) {
   }
 }
 
-async function probeBridge(app) {
+// `attempt` lets us retry once: an idle Base44 function isolate can return a
+// gateway 502 on the FIRST hit while it cold-starts (observed ~30s timeout),
+// then answer normally on the second. Without the retry a single cold start
+// paints the app "down" for the whole day until the next probe — a false alarm.
+async function probeBridge(app, attempt = 1) {
   const start = Date.now()
   try {
     const out = await callBridge(app, 'ping')
     const latency = Date.now() - start
     const ok = out?.ok ?? out?.pong ?? out?.data?.ok
-    if (ok) return { status: latency > DEGRADED_MS ? 'degraded' : 'ok', latency, detail: { via: 'bridge' } }
+    if (ok) return { status: latency > DEGRADED_MS ? 'degraded' : 'ok', latency, detail: { via: 'bridge', ...(attempt > 1 ? { warmup: true } : {}) } }
     return { status: 'degraded', latency, detail: { via: 'bridge', note: 'ping sin ok' } }
   } catch (e) {
-    return { status: 'down', latency: Date.now() - start, detail: { via: 'bridge', error: e.message } }
+    // First failure is most likely a cold-start gateway error → warm it once.
+    if (attempt === 1) return probeBridge(app, 2)
+    return { status: 'down', latency: Date.now() - start, detail: { via: 'bridge', error: e.message, attempts: 2 } }
   }
 }
 
