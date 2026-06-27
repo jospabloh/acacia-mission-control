@@ -128,7 +128,7 @@ export function Support() {
       {rows === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon="support" title="Aún no hay tickets sincronizados" phase={3}>
+        <EmptyState icon="support" title="Aún no hay tickets sincronizados">
           Pulsa <strong>Sincronizar</strong> para traer los tickets de las apps. (Requiere el puente <code className="font-mono">acaciaControl</code> desplegado.)
         </EmptyState>
       ) : (

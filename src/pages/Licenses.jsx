@@ -149,7 +149,7 @@ export function Licenses() {
       {rows === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon="license" title="Aún no hay licencias sincronizadas" phase={1}>
+        <EmptyState icon="license" title="Aún no hay licencias sincronizadas">
           El cron <code className="font-mono text-ink">sync</code> leerá las licencias de cada app y las mostrará aquí.
         </EmptyState>
       ) : (

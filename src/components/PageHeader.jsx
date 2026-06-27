@@ -23,7 +23,7 @@ export function StatCard({ label, value, hint, accent = false }) {
 }
 
 // Designed empty state (replaces the old dashed "coming soon" box).
-export function EmptyState({ icon = 'bolt', title, children, phase }) {
+export function EmptyState({ icon = 'bolt', title, children }) {
   return (
     <div className="rounded-2xl border border-hair bg-paper-card px-8 py-12 text-center">
       <div className="mx-auto h-12 w-12 grid place-items-center rounded-xl bg-brand/10 text-brand">
@@ -31,11 +31,6 @@ export function EmptyState({ icon = 'bolt', title, children, phase }) {
       </div>
       <h2 className="mt-4 font-display text-lg font-semibold text-ink">{title}</h2>
       <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-soft">{children}</p>
-      {phase && (
-        <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-paper-subtle px-3 py-1 text-[11px] font-medium text-ink-mute">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Llega en Fase {phase}
-        </span>
-      )}
     </div>
   )
 }

@@ -38,11 +38,6 @@ export function Nav() {
             <>
               <Icon name={p.icon} size={18} className={isActive ? 'text-white' : 'text-ink-mute group-hover:text-brand'} />
               <span className="flex-1">{p.label}</span>
-              {p.phase > 0 && (
-                <span className={`text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-0.5 ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-paper-subtle text-ink-faint'
-                }`}>F{p.phase}</span>
-              )}
             </>
           )}
         </NavLink>
