@@ -5,11 +5,11 @@
 //   - op:'reply'   → post a staff reply (admin+) via bridge tickets.update.
 //   - op:'status'  → change the ticket status (admin+) via bridge tickets.update.
 // Writes re-sync the app's tickets so the bodega reflects the change.
-import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { ticketControlFor, normalizeMessage, buildTicketReply, buildTicketStatus } from '../_lib/ticketControl.js'
-import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
+import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { ticketControlFor, normalizeMessage, buildTicketReply, buildTicketStatus } from '../ticketControl.js'
+import { syncTicketsForApp } from '../sync/syncTickets.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })

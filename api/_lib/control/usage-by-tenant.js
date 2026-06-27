@@ -2,10 +2,10 @@
 // Counts the app's primary usage entity grouped by its tenant FK via the bridge
 // (usage.byTenant), then enriches tenant names from the bodega. Counts only — no
 // customer record data leaves the app.
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { usageByTenantFor } from '../_lib/usageByTenant.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { usageByTenantFor } from '../usageByTenant.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })

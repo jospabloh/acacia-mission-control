@@ -2,10 +2,10 @@
 // tenants.contacts using the app's recipient spec. Returns [{ id, name, email }]
 // with an email. Names are enriched from the bodega's tenants table when the
 // license record itself carries none (e.g. liuma's SchoolSubscription).
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { messagingFor } from '../_lib/messaging.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { messagingFor } from '../messaging.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })

@@ -1,10 +1,10 @@
 // Send a Comunicado (renewal | campaign | maintenance) to one or many tenants of
 // an app, via the bridge emails.sendFollowup. Admin-gated. Customer-facing — the
 // UI gates every send behind an explicit preview + confirmation with the count.
-import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { messagingFor, renderMessage } from '../_lib/messaging.js'
+import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { messagingFor, renderMessage } from '../messaging.js'
 
 const MAX_RECIPIENTS = 200 // hard cap per request
 

@@ -10,6 +10,9 @@ const ACTION_META = {
   'control:ticket-action': { label: 'Ticket', cls: 'bg-sky-50 text-sky-700' },
   'control:send-message': { label: 'Comunicado', cls: 'bg-amber-50 text-amber-700' },
   'control:run-sync': { label: 'Sync manual', cls: 'bg-emerald-50 text-emerald-700' },
+  'control:member-invite': { label: 'Operador +', cls: 'bg-brand/10 text-brand' },
+  'control:member-role': { label: 'Operador rol', cls: 'bg-brand/10 text-brand' },
+  'control:member-remove': { label: 'Operador −', cls: 'bg-red-50 text-red-600' },
   sync: { label: 'Cron', cls: 'bg-paper-subtle text-ink-mute' },
   'sync-licenses': { label: 'Cron licencias', cls: 'bg-paper-subtle text-ink-mute' },
   'sync-usage': { label: 'Cron uso', cls: 'bg-paper-subtle text-ink-mute' },
@@ -29,6 +32,9 @@ function summarize(r) {
   if (r.action === 'control:ticket-action') return p.op === 'reply' ? 'respuesta' : `estado → ${p.status ?? ''}`
   if (r.action === 'control:send-message') return `${p.type ?? 'mensaje'} · ${p.sent ?? p.recipients ?? '?'} destinatario(s)`
   if (r.action === 'control:run-sync') return (p.kinds ?? []).join(', ') || 'sync'
+  if (r.action === 'control:member-invite') return `${p.email ?? ''} → ${p.role ?? ''}${p.invited ? ' · invitado' : ' · acceso'}`
+  if (r.action === 'control:member-role') return `${p.email ?? ''}: ${p.from ?? ''} → ${p.to ?? ''}`
+  if (r.action === 'control:member-remove') return `${p.email ?? ''} (${p.role ?? ''}) removido`
   if (r.action === 'sync' || r.action?.startsWith('sync-')) return `${p.apps ?? (p.summary?.length ?? '')} apps`
   return ''
 }

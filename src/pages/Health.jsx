@@ -21,6 +21,8 @@ export function Health() {
   const [byApp, setByApp] = useState({}) // app_id -> { latest, checks[] }
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(null)
+  const [probing, setProbing] = useState(() => new Set()) // app_ids currently in flight
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
 
   const load = useCallback(async () => {
     const [{ data: appRows }, { data: health }] = await Promise.all([
@@ -43,12 +45,25 @@ export function Health() {
   async function probeAll() {
     if (!apps?.length) return
     setBusy(true); setFlash(null)
-    try {
-      const res = await Promise.allSettled(apps.map((a) => runSync(a.id, ['health'])))
-      const failed = res.filter((r) => r.status === 'rejected').length
-      await load()
-      setFlash(failed ? { ok: false, msg: `${apps.length - failed}/${apps.length} probadas (${failed} con error).` } : { ok: true, msg: 'Probadas todas las apps.' })
-    } catch (e) { setFlash({ ok: false, msg: e.message }) } finally { setBusy(false) }
+    setProbing(new Set(apps.map((a) => a.id)))
+    setProgress({ done: 0, total: apps.length })
+    let failed = 0
+    // Probe each app independently so a single slow/stuck app (e.g. a bridge
+    // that times out at ~30s) doesn't make the whole action look frozen: every
+    // other card clears the moment it responds and the counter advances live.
+    await Promise.all(apps.map(async (a) => {
+      try { await runSync(a.id, ['health']) } catch { failed += 1 }
+      finally {
+        setProbing((prev) => { const next = new Set(prev); next.delete(a.id); return next })
+        setProgress((p) => ({ ...p, done: p.done + 1 }))
+      }
+    }))
+    await load()
+    setProbing(new Set())
+    setFlash(failed
+      ? { ok: false, msg: `${apps.length - failed}/${apps.length} probadas (${failed} con error).` }
+      : { ok: true, msg: 'Probadas todas las apps.' })
+    setBusy(false)
   }
 
   // Uptime % over the loaded window: a check counts as "up" unless it's down.
@@ -72,12 +87,26 @@ export function Health() {
     <div>
       <PageHeader title="Salud" subtitle="Disponibilidad y latencia por app. Sondea el puente (Base44) o la URL (sitios).">
         <button onClick={probeAll} disabled={busy || !apps?.length}
-          className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">
-          {busy ? 'Probando…' : 'Probar ahora'}
+          className="inline-flex items-center gap-2 rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-60">
+          {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-faint border-t-transparent" />}
+          {busy ? `Probando ${progress.done}/${progress.total}…` : 'Probar ahora'}
         </button>
       </PageHeader>
 
-      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+      {busy && (
+        <div className="mb-4">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-subtle">
+            <div className="h-full rounded-full bg-ink transition-all duration-300"
+              style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
+          </div>
+          <p className="mt-1.5 text-xs text-ink-faint">
+            Sondeando {progress.total} apps… {progress.done} listas
+            {probing.size > 0 && progress.done > 0 && progress.done >= progress.total - 1 ? ' · esperando a la última (puede tardar ~30s si su puente no responde)' : ''}
+          </p>
+        </div>
+      )}
+
+      {!busy && flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
 
       {apps === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
@@ -101,13 +130,20 @@ export function Health() {
               const status = g?.latest?.status ?? 'unknown'
               const t = TONE[status] ?? TONE.unknown
               const up = uptime(g?.checks)
+              const isProbing = probing.has(a.id)
               return (
-                <div key={a.id} className="rounded-xl border border-hair bg-paper-card p-4">
+                <div key={a.id} className={`rounded-xl border bg-paper-card p-4 transition-all ${isProbing ? 'border-ink/30 ring-2 ring-ink/10 animate-pulse' : 'border-hair'}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-ink">{a.name}</span>
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${t.text}`}>
-                      <span className={`h-2 w-2 rounded-full ${t.dot}`} /> {t.label}
-                    </span>
+                    {isProbing ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-mute">
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-ink-faint border-t-transparent" /> Probando…
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${t.text}`}>
+                        <span className={`h-2 w-2 rounded-full ${t.dot}`} /> {t.label}
+                      </span>
+                    )}
                   </div>
                   <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div><dt className="text-[11px] uppercase tracking-wide text-ink-faint">Latencia</dt>

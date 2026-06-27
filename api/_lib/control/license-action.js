@@ -2,11 +2,11 @@
 // suspend, set view-only, or change plan — via the acaciaControl `license.set`
 // bridge. Admin-gated (operator session, admin+). After the write, re-syncs the
 // app's licenses so the bodega reflects the change immediately.
-import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { licenseControlFor, buildLicenseChange, OP_LABEL } from '../_lib/licenseControl.js'
-import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
+import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { licenseControlFor, buildLicenseChange, OP_LABEL } from '../licenseControl.js'
+import { syncLicensesForApp } from '../sync/syncLicenses.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
