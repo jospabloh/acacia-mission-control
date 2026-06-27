@@ -111,7 +111,7 @@ export function Health() {
       {apps === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
       ) : apps.length === 0 ? (
-        <EmptyState icon="health" title="Sin apps registradas" phase={5}>
+        <EmptyState icon="health" title="Sin apps registradas">
           Registra apps para monitorear su disponibilidad.
         </EmptyState>
       ) : (

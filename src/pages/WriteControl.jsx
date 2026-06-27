@@ -78,7 +78,7 @@ export function WriteControl() {
       {rows === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
       ) : visible.length === 0 ? (
-        <EmptyState icon="control" title="Sin operaciones registradas" phase={6}>
+        <EmptyState icon="control" title="Sin operaciones registradas">
           Cada acción de control (licencias, tickets, comunicados, sync) se registra aquí con su autor y detalle.
         </EmptyState>
       ) : (
