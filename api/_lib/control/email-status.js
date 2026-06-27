@@ -2,9 +2,9 @@
 // app, via the acaciaControl bridge (emails.status). Admin-gated. Returns the
 // app's email-log rows (email_type, status, sent_at) or { supported:false } when
 // the app keeps no email log. No writes, no customer email is sent.
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })

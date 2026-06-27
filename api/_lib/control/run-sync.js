@@ -2,13 +2,13 @@
 // triggered by an admin from the app's control panel. Same per-app logic as the
 // daily crons, but gated by the operator's Supabase session (admin+) instead of
 // CRON_SECRET. POST { appId, kinds?: ['licenses','usage','tickets'] }.
-import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
-import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
-import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
-import { probeAppHealth } from '../_lib/sync/syncHealth.js'
+import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
+import { bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { syncLicensesForApp } from '../sync/syncLicenses.js'
+import { syncUsageForApp } from '../sync/syncUsage.js'
+import { syncTicketsForApp } from '../sync/syncTickets.js'
+import { probeAppHealth } from '../sync/syncHealth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })

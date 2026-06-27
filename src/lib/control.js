@@ -60,3 +60,18 @@ export function ticketThread(appId, ticketExternalId) {
 export function ticketAction(appId, ticketExternalId, op, extra = {}) {
   return postControl('/api/control/tickets', { appId, ticketExternalId, op, ...extra })
 }
+
+// ── Members (F8 Ajustes) — owner-only. All four go through one server endpoint
+// so invites (which create a Supabase Auth user) and every change are audited. ──
+export function listMembers() {
+  return postControl('/api/control/members', { op: 'list' })
+}
+export function inviteMember(email, role) {
+  return postControl('/api/control/members', { op: 'invite', email, role })
+}
+export function setMemberRole(userId, role) {
+  return postControl('/api/control/members', { op: 'set-role', userId, role })
+}
+export function removeMember(userId) {
+  return postControl('/api/control/members', { op: 'remove', userId })
+}
