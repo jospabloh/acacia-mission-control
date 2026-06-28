@@ -45,6 +45,9 @@ export default async function handler(req, res) {
     series.push({ day: d, visits: byDay[d] ?? 0 })
   }
 
+  // Never cache: KPIs must reflect events recorded seconds ago (a stale cached
+  // response made a fresh pageview look like "0 visits" in the Sitios catalog).
+  res.setHeader('Cache-Control', 'no-store, max-age=0')
   return res.status(200).json({
     ok: true,
     totals: { visits30: rows.length, visitors30: visitors30.size },
