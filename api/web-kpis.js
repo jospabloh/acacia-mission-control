@@ -15,12 +15,34 @@ export default async function handler(req, res) {
   const since7 = new Date(today.getTime() - 6 * 86_400_000).toISOString().slice(0, 10)
 
   const { data, error } = await supabaseAdmin
-    .from('web_events').select('path, day, visitor').gte('day', since).limit(100_000)
+    .from('web_events').select('host, path, day, visitor').gte('day', since).limit(100_000)
   if (error) return res.status(500).json({ error: error.message })
   const rows = data ?? []
 
-  // Per-path rollups.
+  // Catalog attribution: map each pageview to the registry app with the same host
+  // and the LONGEST matching path prefix. A "site" row (prefix "/") then counts
+  // ALL its pages (/, /mundial-2026, /servicios…), while sub-sites (/baristop,
+  // /freeware/*) keep their own slice. www. is normalized away.
+  const norm = (h) => (h || '').replace(/^www\./i, '').toLowerCase()
+  const { data: appRows } = await supabaseAdmin.from('apps').select('id, url')
+  const catalog = (appRows ?? []).flatMap((a) => {
+    try { const u = new URL(a.url); return [{ id: a.id, host: norm(u.host), prefix: u.pathname.replace(/\/+$/, '') }] }
+    catch { return [] }
+  })
+  function attribute(host, path) {
+    const h = norm(host)
+    let best = null
+    for (const c of catalog) {
+      if (c.host !== h) continue
+      const ok = c.prefix === '' ? true : (path === c.prefix || path.startsWith(c.prefix + '/'))
+      if (ok && (!best || c.prefix.length > best.prefix.length)) best = c
+    }
+    return best?.id ?? null
+  }
+
+  // Per-path rollups (top routes) + per-app rollups (catalog cards).
   const acc = {} // path -> { visits30, set, visits7 }
+  const byApp = {} // appId -> { visits30, visitors:Set, visits7 }
   const visitors30 = new Set()
   const byDay = {} // day -> count
   for (const r of rows) {
@@ -29,6 +51,18 @@ export default async function handler(req, res) {
     if (r.visitor) { a.visitors.add(r.visitor); visitors30.add(r.visitor) }
     if (r.day >= since7) a.visits7++
     byDay[r.day] = (byDay[r.day] ?? 0) + 1
+
+    const appId = attribute(r.host, r.path)
+    if (appId) {
+      const b = (byApp[appId] ??= { visits30: 0, visitors: new Set(), visits7: 0 })
+      b.visits30++
+      if (r.visitor) b.visitors.add(r.visitor)
+      if (r.day >= since7) b.visits7++
+    }
+  }
+  const byAppKpis = {}
+  for (const [id, b] of Object.entries(byApp)) {
+    byAppKpis[id] = { visits30: b.visits30, visitors30: b.visitors.size, visits7: b.visits7 }
   }
   const kpis = {}
   const top = []
@@ -45,9 +79,12 @@ export default async function handler(req, res) {
     series.push({ day: d, visits: byDay[d] ?? 0 })
   }
 
+  // Never cache: KPIs must reflect events recorded seconds ago (a stale cached
+  // response made a fresh pageview look like "0 visits" in the Sitios catalog).
+  res.setHeader('Cache-Control', 'no-store, max-age=0')
   return res.status(200).json({
     ok: true,
     totals: { visits30: rows.length, visitors30: visitors30.size },
-    kpis, top: top.slice(0, 12), series, since,
+    kpis, byApp: byAppKpis, top: top.slice(0, 12), series, since,
   })
 }
