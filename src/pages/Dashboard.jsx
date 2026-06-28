@@ -6,7 +6,6 @@ import { webKpis } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { Icon } from '../components/icons.jsx'
 
-function pathOf(url) { try { return new URL(url).pathname } catch { return null } }
 function fmt(n) { return typeof n === 'number' ? n.toLocaleString('es-MX') : '—' }
 
 const BACKEND_LABEL = { base44: 'Base44', supabase: 'Supabase', external: 'Externo', static: 'Estático' }
@@ -50,7 +49,7 @@ function AppCard({ app, stat }) {
 // Freeware/sites: data-first, not a launcher. A compact table built for KPIs
 // (traffic, usage) with just a small ↗ to open. KPI columns stay "—" until a
 // web-analytics source is connected.
-function CatalogTable({ items, kpis }) {
+function CatalogTable({ items, byApp }) {
   return (
     <div className="overflow-hidden rounded-xl border border-hair bg-paper-card">
       <table className="w-full text-sm">
@@ -65,7 +64,7 @@ function CatalogTable({ items, kpis }) {
         </thead>
         <tbody>
           {items.map((a) => {
-            const k = kpis?.[pathOf(a.url)]
+            const k = byApp?.[a.id]
             return (
               <tr key={a.id} className="border-b border-hair last:border-0">
                 <td className="px-4 py-2.5 font-medium text-ink">{a.name}</td>
@@ -91,6 +90,7 @@ export function Dashboard() {
   const [apps, setApps] = useState([])
   const [stats, setStats] = useState({})
   const [kpis, setKpis] = useState(null) // { path: { visits30, visitors30, visits7 } }
+  const [byApp, setByApp] = useState({}) // appId -> { visits30, visitors30, visits7 }
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -107,7 +107,7 @@ export function Dashboard() {
       setStats(s)
     })
 
-    webKpis().then((r) => setKpis(r.kpis ?? {})).catch(() => setKpis({}))
+    webKpis().then((r) => { setKpis(r.kpis ?? {}); setByApp(r.byApp ?? {}) }).catch(() => { setKpis({}); setByApp({}) })
   }, [])
 
   const hasKpis = kpis && Object.keys(kpis).length > 0
@@ -157,7 +157,7 @@ export function Dashboard() {
             ) : (
               <>
                 {!hasKpis && <p className="mb-2 text-xs text-ink-faint">Tráfico midiéndose — los KPIs aparecen conforme llegan visitas (analítica propia).</p>}
-                <CatalogTable items={items} kpis={kpis} />
+                <CatalogTable items={items} byApp={byApp} />
               </>
             )}
           </section>
