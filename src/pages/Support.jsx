@@ -37,6 +37,22 @@ function fmtWhen(v) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+// Compact "time left / overdue" for an SLA deadline, for OPEN tickets only.
+// Returns null when the clock doesn't apply (closed ticket / no due time).
+function slaBadge(row) {
+  if (!isOpen(row.status)) return null
+  const due = row.sla_resolve_due_at
+  if (!due) return null
+  const ms = Date.parse(due) - Date.now()
+  if (Number.isNaN(ms)) return null
+  const mins = Math.round(Math.abs(ms) / 60000)
+  const h = Math.floor(mins / 60)
+  const txt = h >= 1 ? `${h}h ${mins % 60}m` : `${mins}m`
+  return ms < 0
+    ? { label: `SLA vencido ${txt}`, cls: 'bg-red-50 text-red-700' }
+    : { label: `SLA ${txt}`, cls: mins <= 120 ? 'bg-amber-50 text-amber-700' : 'bg-paper-subtle text-ink-mute' }
+}
+
 export function Support() {
   const [rows, setRows] = useState(null) // null = loading
   const [filterApp, setFilterApp] = useState('all')
@@ -50,11 +66,27 @@ export function Support() {
 
   const load = useCallback(() => {
     return supabase.from('tickets')
-      .select('id, app_id, external_id, subject, status, priority, requester, last_activity_at, created_at, apps(name), tenants(name)')
+      .select('id, app_id, external_id, subject, status, priority, requester, last_activity_at, created_at, customer_created_at, sla_first_response_due_at, sla_resolve_due_at, source, apps(name), tenants(name)')
       .order('last_activity_at', { ascending: false, nullsFirst: false })
       .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
   }, [])
   useEffect(() => { load() }, [load])
+
+  // Real-time: the push ingest (api/ingest/ticket.js) writes a ticket the instant
+  // a customer raises it, so subscribe to the bodega and refresh live — no manual
+  // "sincronizar". A new INSERT also raises a transient banner.
+  useEffect(() => {
+    const ch = supabase.channel('tickets-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => {
+        load()
+        if (payload.eventType === 'INSERT') {
+          const t = payload.new
+          setFlash({ ok: true, msg: `🎫 Nuevo ticket: ${t.subject || t.external_id}` })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [load])
 
   const openTicket = useCallback(async (row) => {
     setSel(row); setThread(null); setReply(''); setFlash(null)
@@ -150,6 +182,7 @@ export function Support() {
                   <span className="truncate">{r.tenants?.name ?? r.requester?.email ?? r.requester?.name ?? '—'}</span>
                   <span>·</span>
                   <span className={PRIO_TONE[String(r.priority ?? '').toLowerCase()] ?? 'text-ink-faint'}>{r.priority ?? '—'}</span>
+                  {(() => { const b = slaBadge(r); return b ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}>{b.label}</span> : null })()}
                   <span className="ml-auto">{fmtWhen(r.last_activity_at || r.created_at)}</span>
                 </div>
               </button>
