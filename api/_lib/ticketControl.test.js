@@ -5,9 +5,9 @@ import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketApps } fro
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
 
-// ── all 5 apps now persist tickets ───────────────────────────────────────────
-test('all 5 portfolio apps have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['flowfin', 'liuma', 'puntos', 'rumbo', 'stockflow'])
+// ── all 6 apps now persist tickets ───────────────────────────────────────────
+test('all portfolio apps have ticket configs', () => {
+  assert.deepEqual(ticketApps().sort(), ['flowfin', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
 })
 
 // ── stockflow / flowfin mirror the puntos rich model with a different tenant FK ─
@@ -15,6 +15,18 @@ test('stockflow reply: business_id message + rich counters', () => {
   const raw = { id: 's1', business_id: 'b3', status: 'open', messages_count: 0 }
   const out = buildTicketReply('stockflow', { ticketRaw: raw, body: 'hola', actorEmail: 'op@acacia.mx', now: NOW })
   assert.equal(out.message.business_id, 'b3')
+  assert.equal(out.message.author_role, 'owner')
+  assert.equal(out.message.is_internal_note, false)
+  assert.equal(out.patch.status, 'in_progress')
+  assert.equal(out.patch.messages_count, 1)
+  assert.equal(out.patch.unread_for_tenant, true)
+  assert.equal(out.patch.first_response_at, NOW_ISO)
+})
+
+test('radar reply: company_id message + rich counters', () => {
+  const raw = { id: 'r1', company_id: 'co7', status: 'open', messages_count: 0 }
+  const out = buildTicketReply('radar', { ticketRaw: raw, body: 'hola', actorEmail: 'op@acacia.mx', now: NOW })
+  assert.equal(out.message.company_id, 'co7')
   assert.equal(out.message.author_role, 'owner')
   assert.equal(out.message.is_internal_note, false)
   assert.equal(out.patch.status, 'in_progress')
