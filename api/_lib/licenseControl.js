@@ -38,6 +38,14 @@ const APPS = {
     plans: ['start', 'growth', 'pro'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
   },
+  // Radar (HR/attendance): license lives on the Company entity. No trial or
+  // payment-reference fields modeled yet; expiry is a plain date (license_expiry).
+  radar: {
+    entity: 'Company', statusField: 'status', planField: 'tier',
+    statuses: { active: 'active', suspended: 'suspended' },
+    plans: ['starter', 'pro', 'enterprise'],
+    billing: { expiryField: 'license_expiry', trialField: null, dateFormat: 'date', payment: null, dayConvention: 'preserve_day' },
+  },
   rumbo: {
     entity: 'TenantLicense', statusField: 'status', planField: 'plan',
     statuses: { active: 'active', suspended: 'suspended' }, // suspend auto-blocks write_access
