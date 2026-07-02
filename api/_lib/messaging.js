@@ -15,6 +15,10 @@ export const APP_MSG = {
     recipient: { related: { entity: 'User', keyField: 'business_id', keyFromRecord: 'id', emailField: 'email', roleField: 'role', roles: ['owner', 'admin'] }, nameField: 'name' },
     log: { entity: 'EmailNotification', idField: 'business_id' },
   },
+  radar: {
+    name: 'Radar', entity: 'Company', value: 'la asistencia de tu equipo bajo control',
+    recipient: { related: { entity: 'User', keyField: 'company_id', keyFromRecord: 'id', emailField: 'email', roleField: 'app_role', roles: ['company_admin'] }, nameField: 'name' },
+  },
   rumbo: {
     name: 'Rumbo', entity: 'TenantLicense', value: 'tu flota y tus viajes bajo control',
     recipient: { fields: ['owner_email'], nameField: 'tenant_name' },
