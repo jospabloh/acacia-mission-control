@@ -8,6 +8,7 @@ import { bridgeConfigured } from '../_lib/appBridge.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
 import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
+import { autoCloseResolvedForApp } from '../_lib/sync/autoCloseResolved.js'
 import { probeAppHealth } from '../_lib/sync/syncHealth.js'
 
 export default async function handler(req, res) {
@@ -34,6 +35,9 @@ export default async function handler(req, res) {
       try { row.licenses = await syncLicensesForApp(app) } catch (e) { row.licenses = { error: e.message } }
       try { row.usage = await syncUsageForApp(app, day) } catch (e) { row.usage = { error: e.message } }
       try { row.tickets = await syncTicketsForApp(app) } catch (e) { row.tickets = { error: e.message } }
+      // ITSM auto-close: resolved tickets idle past the grace window → closed.
+      // Runs after the ticket sync so it decides on the app's fresh state.
+      try { row.autoclose = await autoCloseResolvedForApp(app) } catch (e) { row.autoclose = { error: e.message } }
     }
     summary.push(row)
   }
