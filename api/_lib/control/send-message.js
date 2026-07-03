@@ -2,9 +2,10 @@
 // an app, via the bridge emails.sendFollowup. Admin-gated. Customer-facing — the
 // UI gates every send behind an explicit preview + confirmation with the count.
 import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { bridgeConfigured } from '../appBridge.js'
 import { requireMember } from '../requireMember.js'
-import { messagingFor, renderMessage } from '../messaging.js'
+import { messagingFor } from '../messaging.js'
+import { sendFollowup } from '../emailFollowup.js'
 
 const MAX_RECIPIENTS = 200 // hard cap per request
 
@@ -46,18 +47,8 @@ export default async function handler(req, res) {
     if (!r?.email) { results.push({ id: r?.id, skipped: 'sin email' }); continue }
     const date = DATED.has(type) ? dateByExt[r.id] : null
     const days = date ? Math.max(0, Math.ceil((new Date(date).getTime() - now) / 86_400_000)) : null
-    const { subject: subj, html } = renderMessage(type, { app: cfg, tenantName: r.name, date, days, subject, body, maint })
-
-    const log = cfg.log && r.id
-      ? { entity: cfg.log.entity, row: { [cfg.log.idField]: r.id, email_type: `mc_${type}`, recipient_email: r.email, status: 'sent', notification_key: `mc:${type}:${r.id}:${new Date().toISOString().slice(0, 10)}` } }
-      : undefined
-
-    try {
-      await callBridge(app, 'emails.sendFollowup', { to: r.email, subject: subj, html, log })
-      results.push({ id: r.id, email: r.email, sent: true })
-    } catch (e) {
-      results.push({ id: r.id, email: r.email, error: e.message })
-    }
+    const out = await sendFollowup(app, cfg, type, r, { date, days, subject, body, maint })
+    results.push(out.sent ? { id: r.id, email: r.email, sent: true } : { id: r.id, email: r.email, error: out.error })
   }
 
   const sent = results.filter((x) => x.sent).length

@@ -80,6 +80,22 @@ export function renderMessage(type, ctx) {
     }
   }
 
+  if (type === 'payment_confirmed') {
+    // Agradecimiento tras confirmar un pago: la licencia queda activa por el
+    // período pagado. Se dispara al presionar "Confirmar pago" (opcional).
+    const months = Number(ctx.periodMonths) || 1
+    const periodo = months === 12 ? 'un año' : months === 1 ? 'un mes' : `${months} meses`
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}¡gracias! Tu licencia de ${app.name} está activa ✅`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>¡Recibimos tu pago, gracias! 🌿 Tu licencia de <span class="hi">${esc(app.name)}</span> quedó <strong>activa</strong> y <strong>${esc(app.value)}</strong> sigue sin interrupciones.</p>
+<p>Renovaste por <strong>${periodo}</strong>${ctx.date ? `: tu licencia es válida hasta el <strong>${fmtDate(ctx.date)}</strong>` : ''}.</p>
+${ctx.reference ? `<p style="color:#8a8780;font-size:13px">Referencia de pago: <strong>${esc(ctx.reference)}</strong></p>` : ''}
+<p>Cualquier duda, respóndenos este correo o escríbele a tu ejecutivo ACACIA. Gracias por seguir con nosotros.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
   if (type === 'renewal_fyi') {
     // Personal heads-up for tenants ON a recurring plan: the Mercado Pago charge
     // runs automatically on the 1st — nothing for them to do. Reassuring, FYI tone.
