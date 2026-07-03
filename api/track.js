@@ -28,8 +28,19 @@ export default async function handler(req, res) {
     if (path && path.startsWith('/') && !isBot && supabaseAdmin) {
       const day = new Date().toISOString().slice(0, 10)
       const visitor = crypto.createHash('sha256').update(`${SALT}|${day}|${clientIp(req)}|${ua}`).digest('hex').slice(0, 16)
-      // fire-and-forget; don't make the pixel wait on the DB
-      supabaseAdmin.from('web_events').insert({ path, host, ref, visitor }).then(() => {}, () => {})
+      // Await the insert. A fire-and-forget promise is unreliable here: Vercel
+      // freezes the serverless function the instant we send the pixel below, so
+      // the insert was routinely killed before it reached Supabase and pageviews
+      // vanished (the endpoint returned 200 but no row was written). Bound the
+      // wait so a slow/unreachable DB can never hang the pixel — we return the
+      // GIF regardless, and log the reason if the write didn't land.
+      let timer
+      const timeout = new Promise((resolve) => { timer = setTimeout(resolve, 2500) })
+      const write = supabaseAdmin.from('web_events').insert({ path, host, ref, visitor })
+        .then(({ error }) => { if (error) console.error('track: insert error', error.message) },
+              (e) => console.error('track: insert threw', e?.message))
+      await Promise.race([write, timeout])
+      clearTimeout(timer)
     }
   } catch { /* never fail the pixel */ }
 
