@@ -35,7 +35,7 @@ export function renderTicketAlert(ctx) {
   const prioColor = PRIO_COLOR[prio] ?? '#3b6ef8'
   const requester = [ctx.requesterName, ctx.requesterEmail].filter(Boolean).join(' · ') || '—'
 
-  const subject = `🎫 [${ctx.appName}] Ticket #${ctx.ticketId} — ${ctx.subject || 'Nuevo ticket de soporte'} (${prioLabel})`
+  const subject = `🎫 [${ctx.appName}] ${ctx.ticketId} — ${ctx.subject || 'Nuevo ticket de soporte'} (${prioLabel})`
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -47,8 +47,9 @@ export function renderTicketAlert(ctx) {
     <span style="background:${prioColor};color:#fff;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px">${esc(prioLabel)}</span>
   </div>
   <div style="padding:20px 24px">
-    <div style="font-size:12px;color:#8a8780;letter-spacing:.04em;text-transform:uppercase">Ticket en sistema</div>
-    <div style="font-size:22px;font-weight:700;color:#0e0d14;margin:2px 0 16px">#${esc(ctx.ticketId)}</div>
+    <div style="font-size:12px;color:#8a8780;letter-spacing:.04em;text-transform:uppercase">Folio</div>
+    <div style="font-size:22px;font-weight:700;color:#0e0d14;margin:2px 0 2px">${esc(ctx.ticketId)}</div>
+    ${ctx.externalId && String(ctx.externalId) !== String(ctx.ticketId) ? `<div style="font-size:11px;color:#b3b0a7;margin:0 0 16px">ref. ${esc(ctx.externalId)}</div>` : '<div style="margin-bottom:14px"></div>'}
     <table style="width:100%;border-collapse:collapse">
       ${row('App', ctx.appName)}
       ${row('Asunto', ctx.subject)}

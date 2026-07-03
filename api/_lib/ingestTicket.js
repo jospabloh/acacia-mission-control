@@ -66,7 +66,9 @@ export async function processIncomingTicket({ app, record }) {
   const link = process.env.MC_PUBLIC_URL ? `${process.env.MC_PUBLIC_URL.replace(/\/$/, '')}/support` : null
   const alert = renderTicketAlert({
     appName: app.name || appId,
-    ticketId: ticket.external_id,
+    // Lead with the human folio (RUM-000001); keep the technical id as a subline.
+    ticketId: ticket.ticket_number || ticket.external_id,
+    externalId: ticket.external_id,
     subject: ticket.subject,
     issue: record.description ?? record.body ?? record.message ?? null,
     category: record.category ?? null,

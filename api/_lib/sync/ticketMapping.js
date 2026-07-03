@@ -33,6 +33,10 @@ export function mapTicketRecord(record, app) {
   const ticket = {
     app_id: app.id,
     external_id: String(record.id),
+    // Human-readable folio (ITSM), e.g. RUM-000001, assigned by the app server-side.
+    // external_id stays the stable technical key (bridge updates key off it); this
+    // is what operators and customers reference. Null for legacy rows without one.
+    ticket_number: record.ticket_number ?? null,
     subject: (cfg?.subjectField ? record[cfg.subjectField] : record.subject) ?? null,
     status: (cfg?.statusField ? record[cfg.statusField] : record.status) ?? null,
     priority: rawPriority,
