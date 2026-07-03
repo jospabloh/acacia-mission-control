@@ -37,6 +37,18 @@ test('date-format apps return YYYY-MM-DD, not full ISO (rumbo)', () => {
 
 // ── buildLicenseChange: confirm_payment patches the field each app enforces ──
 
+test('dayConventionOverride forces first_of_month on a preserve_day app (auto-renovación)', () => {
+  // stockflow es preserve_day normalmente; la renovación automática fuerza el 1°.
+  const { patch, newExpiry } = buildLicenseChange('stockflow', 'confirm_payment', {
+    currentExpiry: '2026-07-10T00:00:00Z', periodMonths: 1, now: NOW, dayConventionOverride: 'first_of_month',
+  })
+  assert.equal(patch.license_expires_at, '2026-08-01T00:00:00.000Z')
+  assert.equal(newExpiry, '2026-08-01T00:00:00.000Z')
+  // Sin override respetaría el día (preserve_day → 2026-08-10).
+  const { patch: base } = buildLicenseChange('stockflow', 'confirm_payment', { currentExpiry: '2026-07-10T00:00:00Z', periodMonths: 1, now: NOW })
+  assert.equal(base.license_expires_at, '2026-08-10T00:00:00.000Z')
+})
+
 test('flowfin confirm_payment: license_expires_at on the 1st + full payment fields', () => {
   const { patch } = buildLicenseChange('flowfin', 'confirm_payment', { currentExpiry: '2026-01-01T00:00:00Z', periodMonths: 1, paymentReference: 'MP-1', actorEmail: 'op@acacia.mx', now: NOW })
   assert.equal(patch.billing_status, 'active')

@@ -88,6 +88,7 @@ const TONE_CLS = {
 
 export function Licenses() {
   const [rows, setRows] = useState(null) // null = loading
+  const [renewals, setRenewals] = useState({}) // key `app|ext` → { renewed, verified, new_expiry }
   const [confirm, setConfirm] = useState(null) // { row, op, plan, label, warn }
   const [pay, setPay] = useState(null) // { row } — payment-confirmation modal
   const [months, setMonths] = useState(1)
@@ -96,11 +97,18 @@ export function Licenses() {
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(null) // { ok, msg }
 
-  const load = useCallback(() => {
-    return supabase.from('licenses')
-      .select('id, external_id, app_id, plan, status, seats, current_period_end, trial_ends_at, auto_renew, apps(name), tenants(name)')
-      .order('synced_at', { ascending: false })
-      .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
+  const load = useCallback(async () => {
+    const period = new Date().toISOString().slice(0, 7)
+    const [{ data, error }, { data: rem }] = await Promise.all([
+      supabase.from('licenses')
+        .select('id, external_id, app_id, plan, status, seats, current_period_end, trial_ends_at, auto_renew, apps(name), tenants(name)')
+        .order('synced_at', { ascending: false }),
+      supabase.from('renewal_reminders')
+        .select('app_id, external_id, renewed, verified, new_expiry').eq('period', period).eq('renewed', true),
+    ])
+    if (error) console.error(error.message)
+    setRows(data ?? [])
+    setRenewals(Object.fromEntries((rem ?? []).map((r) => [`${r.app_id}|${r.external_id}`, r])))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -136,6 +144,22 @@ export function Licenses() {
     } catch (e) {
       setFlash({ ok: false, msg: e.message })
     } finally { setBusy(false) }
+  }
+
+  // Confirma que el cargo de Mercado Pago de una auto-renovación sí se realizó.
+  // Escribe renewal_reminders directo por Supabase (RLS permite UPDATE a admin).
+  async function verifyRenewal(row) {
+    const period = new Date().toISOString().slice(0, 7)
+    const key = `${row.app_id}|${row.external_id}`
+    const { data: { session } } = await supabase.auth.getSession()
+    setRenewals((m) => ({ ...m, [key]: { ...m[key], verified: true } }))
+    const { error } = await supabase.from('renewal_reminders')
+      .update({ verified: true, verified_at: new Date().toISOString(), verified_by: session?.user?.email ?? null })
+      .eq('app_id', row.app_id).eq('external_id', row.external_id).eq('period', period)
+    if (error) {
+      setRenewals((m) => ({ ...m, [key]: { ...m[key], verified: false } })) // revertir
+      setFlash({ ok: false, msg: `No se pudo verificar: ${error.message}` })
+    }
   }
 
   // Marca/desmarca cobro automático (metadata de la bodega). El operador es admin,
@@ -191,6 +215,18 @@ export function Licenses() {
                     <td className="px-4 py-3">
                       <span className={`text-xs ${TONE_CLS[exp.tone]}`}>{exp.label}</span>
                       {exp.sub && <div className="text-[11px] text-ink-faint">{exp.sub}</div>}
+                      {(() => {
+                        const rr = renewals[`${r.app_id}|${r.external_id}`]
+                        if (!rr) return null
+                        return rr.verified
+                          ? <div className="mt-1 text-[11px] text-emerald-600">✓ Auto-renovado y verificado</div>
+                          : (
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="Se renovó automáticamente asumiendo el cargo de Mercado Pago. Confirma que el cobro se realizó.">Auto-renovado · verificar</span>
+                              <button onClick={() => verifyRenewal(r)} className="text-[11px] font-medium text-brand hover:underline">Verificar</button>
+                            </div>
+                          )
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       {!controllable ? <span className="text-xs text-ink-faint">—</span> : (
