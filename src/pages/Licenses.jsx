@@ -92,12 +92,13 @@ export function Licenses() {
   const [pay, setPay] = useState(null) // { row } — payment-confirmation modal
   const [months, setMonths] = useState(1)
   const [payRef, setPayRef] = useState('')
+  const [payEmail, setPayEmail] = useState(true) // enviar correo de confirmación
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(null) // { ok, msg }
 
   const load = useCallback(() => {
     return supabase.from('licenses')
-      .select('id, external_id, app_id, plan, status, seats, current_period_end, trial_ends_at, apps(name), tenants(name)')
+      .select('id, external_id, app_id, plan, status, seats, current_period_end, trial_ends_at, auto_renew, apps(name), tenants(name)')
       .order('synced_at', { ascending: false })
       .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
   }, [])
@@ -124,14 +125,29 @@ export function Licenses() {
     const { row } = pay
     try {
       const out = await licenseAction(row.app_id, row.external_id, 'confirm_payment', null, {
-        periodMonths: months, paymentReference: payRef.trim() || undefined,
+        periodMonths: months, paymentReference: payRef.trim() || undefined, sendEmail: payEmail,
       })
       await load()
-      setFlash({ ok: true, msg: `Pago confirmado para ${row.tenants?.name ?? row.external_id}. Renovado hasta ${fmtDate(out?.newExpiry)}.` })
-      setPay(null); setPayRef(''); setMonths(1)
+      const mail = payEmail
+        ? (out?.emailed ? ' Correo de confirmación enviado.' : ' (No se pudo enviar el correo: sin destinatario o falló el puente.)')
+        : ''
+      setFlash({ ok: true, msg: `Pago confirmado para ${row.tenants?.name ?? row.external_id}. Renovado hasta ${fmtDate(out?.newExpiry)}.${mail}` })
+      setPay(null); setPayRef(''); setMonths(1); setPayEmail(true)
     } catch (e) {
       setFlash({ ok: false, msg: e.message })
     } finally { setBusy(false) }
+  }
+
+  // Marca/desmarca cobro automático (metadata de la bodega). El operador es admin,
+  // así que RLS permite escribir `licenses` directo por Supabase — sin endpoint.
+  async function toggleAutoRenew(row) {
+    const next = !row.auto_renew
+    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, auto_renew: next } : r)))
+    const { error } = await supabase.from('licenses').update({ auto_renew: next }).eq('id', row.id)
+    if (error) {
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, auto_renew: !next } : r))) // revertir
+      setFlash({ ok: false, msg: `No se pudo cambiar el cobro automático: ${error.message}` })
+    }
   }
 
   const ask = (row, op, plan) => setConfirm({
@@ -180,7 +196,7 @@ export function Licenses() {
                       {!controllable ? <span className="text-xs text-ink-faint">—</span> : (
                         <div className="flex flex-wrap items-center gap-1.5">
                           {HAS_BILLING.has(r.app_id) && (
-                            <button onClick={() => { setPay({ row: r }); setMonths(1); setPayRef('') }}
+                            <button onClick={() => { setPay({ row: r }); setMonths(1); setPayRef(''); setPayEmail(true) }}
                               className="rounded-md border border-brand/30 bg-brand/5 px-2 py-1 text-xs font-medium text-brand hover:bg-brand/10">Confirmar pago</button>
                           )}
                           {r.status !== 'active' && (
@@ -197,6 +213,14 @@ export function Licenses() {
                             <option value="">Plan…</option>
                             {plans.filter((p) => p !== r.plan).map((p) => <option key={p} value={p}>{p}</option>)}
                           </select>
+                          {HAS_BILLING.has(r.app_id) && (
+                            <button onClick={() => toggleAutoRenew(r)} type="button" role="switch" aria-checked={!!r.auto_renew}
+                              title="Cobro automático en Mercado Pago: el día 1 recibe un aviso de cargo en vez del recordatorio de pago."
+                              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${r.auto_renew ? 'border-brand/40 bg-brand/10 text-brand' : 'border-hair text-ink-mute hover:bg-paper-subtle'}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${r.auto_renew ? 'bg-brand' : 'bg-ink-faint'}`} />
+                              Cobro auto
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -247,6 +271,11 @@ export function Licenses() {
             <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-ink-mute">Referencia de pago <span className="text-ink-faint normal-case">(opcional — ID Mercado Pago / folio)</span></label>
             <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="MP-123456 / nota manual"
               className="mt-1.5 w-full rounded-lg border border-hair bg-white px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint" />
+
+            <label className="mt-4 flex items-start gap-2 text-sm text-ink-soft">
+              <input type="checkbox" checked={payEmail} onChange={(e) => setPayEmail(e.target.checked)} className="mt-0.5 accent-brand" />
+              <span>Enviar correo de confirmación al admin de la tienda (agradecimiento + vigencia).</span>
+            </label>
 
             <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
               Nuevo vencimiento: <span className="font-semibold">{fmtDate(previewExpiry(pay.row.current_period_end, months, pay.row.app_id).toISOString())}</span>. La licencia queda <span className="font-semibold">activa</span>.

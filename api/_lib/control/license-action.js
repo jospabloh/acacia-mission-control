@@ -7,6 +7,8 @@ import { callBridge, bridgeConfigured } from '../appBridge.js'
 import { requireMember } from '../requireMember.js'
 import { licenseControlFor, buildLicenseChange, OP_LABEL } from '../licenseControl.js'
 import { syncLicensesForApp } from '../sync/syncLicenses.js'
+import { messagingFor } from '../messaging.js'
+import { resolveRecipients, sendFollowup } from '../emailFollowup.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
@@ -14,7 +16,7 @@ export default async function handler(req, res) {
   const member = await requireMember(req, res, 'admin')
   if (!member) return
 
-  const { appId, licenseExternalId, op, plan, periodMonths, paymentReference } = req.body ?? {}
+  const { appId, licenseExternalId, op, plan, periodMonths, paymentReference, sendEmail } = req.body ?? {}
   if (!appId || !licenseExternalId || !op) return res.status(400).json({ error: 'falta appId/licenseExternalId/op' })
   if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
 
@@ -48,11 +50,37 @@ export default async function handler(req, res) {
     let resync = null
     try { resync = await syncLicensesForApp(app) } catch (e) { resync = { error: e.message } }
 
+    // Correo de agradecimiento al admin de la tienda tras confirmar el pago.
+    // Best-effort: si falla, el pago ya quedó aplicado; nunca revierte el write.
+    // `emailed`: true (enviado) | false (falló/omitido) | null (no aplica/sin sendEmail).
+    let emailed = null
+    if (op === 'confirm_payment' && sendEmail !== false) {
+      emailed = false
+      try {
+        const msgCfg = messagingFor(appId)
+        if (msgCfg) {
+          const recipients = await resolveRecipients(app, msgCfg)
+          const recipient = recipients.find((r) => r.id === licenseExternalId)
+          if (recipient) {
+            const r = await sendFollowup(app, msgCfg, 'payment_confirmed', recipient, {
+              date: change.newExpiry, periodMonths, reference: paymentReference,
+            })
+            emailed = !!r.sent
+            if (r.error) console.warn('[license-action] correo de confirmación falló:', r.error)
+          } else {
+            console.warn('[license-action] sin destinatario resoluble para', appId, licenseExternalId)
+          }
+        }
+      } catch (e) {
+        console.warn('[license-action] resolución de destinatario falló:', e.message)
+      }
+    }
+
     await audit('control:license-action', {
       actor: member.user_id, actor_email: member.email, target_app: appId, target_id: licenseExternalId,
-      payload: { op, plan: plan ?? null, label: OP_LABEL[op] ?? op, patch: change.patch, newExpiry: change.newExpiry ?? null },
+      payload: { op, plan: plan ?? null, label: OP_LABEL[op] ?? op, patch: change.patch, newExpiry: change.newExpiry ?? null, emailed },
     })
-    return res.status(200).json({ ok: true, op, applied: !!(out?.ok ?? out?.updated), newExpiry: change.newExpiry ?? null, resync })
+    return res.status(200).json({ ok: true, op, applied: !!(out?.ok ?? out?.updated), newExpiry: change.newExpiry ?? null, emailed, resync })
   } catch (e) {
     return res.status(502).json({ error: e.message })
   }

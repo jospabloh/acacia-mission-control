@@ -3,9 +3,10 @@
 // with an email. Names are enriched from the bodega's tenants table when the
 // license record itself carries none (e.g. liuma's SchoolSubscription).
 import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { bridgeConfigured } from '../appBridge.js'
 import { requireMember } from '../requireMember.js'
 import { messagingFor } from '../messaging.js'
+import { resolveRecipients } from '../emailFollowup.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
@@ -23,20 +24,12 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ error: error.message })
   if (!app) return res.status(404).json({ error: 'app no encontrada' })
 
-  let contacts
+  let withEmail
   try {
-    const out = await callBridge(app, 'tenants.contacts', { entity: cfg.entity, recipient: cfg.recipient })
-    contacts = out?.contacts ?? out?.data?.contacts ?? []
+    withEmail = await resolveRecipients(app, cfg)
   } catch (e) {
     return res.status(502).json({ error: e.message })
   }
 
-  // Enrich missing names from the synced tenants table (external_id = record id).
-  const { data: tenants } = await supabaseAdmin.from('tenants').select('external_id, name').eq('app_id', appId)
-  const nameByExt = Object.fromEntries((tenants ?? []).map((t) => [t.external_id, t.name]))
-  const withEmail = contacts
-    .filter((c) => c.email)
-    .map((c) => ({ id: c.id, email: c.email, name: c.name || nameByExt[c.id] || null }))
-
-  return res.status(200).json({ ok: true, contacts: withEmail, total: contacts.length, withEmail: withEmail.length })
+  return res.status(200).json({ ok: true, contacts: withEmail, withEmail: withEmail.length })
 }
