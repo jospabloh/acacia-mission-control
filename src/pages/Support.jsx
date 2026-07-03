@@ -66,7 +66,7 @@ export function Support() {
 
   const load = useCallback(() => {
     return supabase.from('tickets')
-      .select('id, app_id, external_id, subject, status, priority, requester, last_activity_at, created_at, customer_created_at, sla_first_response_due_at, sla_resolve_due_at, source, apps(name), tenants(name)')
+      .select('id, app_id, external_id, ticket_number, subject, status, priority, requester, last_activity_at, created_at, customer_created_at, sla_first_response_due_at, sla_resolve_due_at, source, apps(name), tenants(name)')
       .order('last_activity_at', { ascending: false, nullsFirst: false })
       .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
   }, [])
@@ -81,7 +81,7 @@ export function Support() {
         load()
         if (payload.eventType === 'INSERT') {
           const t = payload.new
-          setFlash({ ok: true, msg: `🎫 Nuevo ticket: ${t.subject || t.external_id}` })
+          setFlash({ ok: true, msg: `🎫 Nuevo ticket ${t.ticket_number ? `${t.ticket_number}: ` : ''}${t.subject || t.external_id}` })
         }
       })
       .subscribe()
@@ -173,7 +173,10 @@ export function Support() {
               <button key={r.id} onClick={() => openTicket(r)}
                 className={`block w-full px-4 py-3 text-left hover:bg-paper-subtle ${sel?.id === r.id ? 'bg-paper-subtle' : ''}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-ink">{r.subject || '(sin asunto)'}</span>
+                  <span className="truncate text-sm font-medium text-ink">
+                    {r.ticket_number && <span className="mr-1.5 font-mono text-xs font-semibold text-brand">{r.ticket_number}</span>}
+                    {r.subject || '(sin asunto)'}
+                  </span>
                   <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${tone(r.status)}`}>{r.status ?? '—'}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-xs text-ink-faint">
@@ -197,6 +200,7 @@ export function Support() {
               <>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
+                    {sel.ticket_number && <p className="font-mono text-xs font-semibold text-brand">{sel.ticket_number}</p>}
                     <h3 className="font-display text-base font-semibold text-ink">{sel.subject || '(sin asunto)'}</h3>
                     <p className="mt-0.5 text-xs text-ink-faint">
                       {sel.apps?.name ?? sel.app_id} · {sel.tenants?.name ?? sel.requester?.email ?? sel.requester?.name ?? '—'}
