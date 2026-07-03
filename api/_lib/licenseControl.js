@@ -120,7 +120,7 @@ export function computeRenewalExpiry({ currentExpiry, periodMonths = 1, dateForm
 // Build the { patch, log } the bridge `license.set` expects for one operation.
 // Returns { error } when the op/plan is invalid for the app.
 // ctx (confirm_payment only): { currentExpiry, periodMonths, paymentReference, now }.
-export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry, periodMonths, paymentReference, now } = {}) {
+export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry, periodMonths, paymentReference, now, dayConventionOverride } = {}) {
   const cfg = APPS[appId]
   if (!cfg) return { error: `app ${appId} no soporta control de licencia` }
 
@@ -142,7 +142,11 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
     if (!b) return { error: `${appId} no soporta confirmación de pago` }
     const months = Number(periodMonths) || 1
     const when = now ? new Date(now) : new Date()
-    newExpiry = computeRenewalExpiry({ currentExpiry, periodMonths: months, dateFormat: b.dateFormat, dayConvention: b.dayConvention, now: when })
+    // La renovación automática (cobro MP el día 1) fuerza 'first_of_month' para que
+    // el vencimiento caiga siempre el 1° del mes siguiente, sin importar el
+    // dayConvention normal del app.
+    const dayConvention = dayConventionOverride || b.dayConvention
+    newExpiry = computeRenewalExpiry({ currentExpiry, periodMonths: months, dateFormat: b.dateFormat, dayConvention, now: when })
     // A confirmed payment always lands the tenant on 'active' with a fresh expiry.
     patch[cfg.statusField] = cfg.statuses.active
     patch[b.expiryField] = newExpiry

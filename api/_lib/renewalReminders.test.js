@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { currentPeriodKey, endOfMonthUTC, qualifiesForReminder, reminderKindFor } from './renewalReminders.js'
+import { currentPeriodKey, endOfMonthUTC, qualifiesForReminder, reminderKindFor, shouldAutoRenew } from './renewalReminders.js'
 
 // Reloj fijo: el cron corre el día 1 a las 15:00 UTC.
 const NOW = new Date('2026-07-01T15:00:00Z')
@@ -35,4 +35,14 @@ test('reminderKindFor: cobro automático → aviso; manual → recordatorio', ()
   assert.equal(reminderKindFor({ auto_renew: true }), 'renewal_fyi')
   assert.equal(reminderKindFor({ auto_renew: false }), 'renewal')
   assert.equal(reminderKindFor({}), 'renewal')
+})
+
+test('shouldAutoRenew: activo con cobro auto sí; suspendido/cancelado/solo-lectura no', () => {
+  assert.equal(shouldAutoRenew({ auto_renew: true, status: 'active' }), true)
+  assert.equal(shouldAutoRenew({ auto_renew: true, status: 'suspended' }), false)
+  assert.equal(shouldAutoRenew({ auto_renew: true, status: 'canceled' }), false)
+  assert.equal(shouldAutoRenew({ auto_renew: true, status: 'cancelled' }), false)
+  assert.equal(shouldAutoRenew({ auto_renew: true, status: 'view_only' }), false)
+  assert.equal(shouldAutoRenew({ auto_renew: false, status: 'active' }), false)
+  assert.equal(shouldAutoRenew({}), false)
 })

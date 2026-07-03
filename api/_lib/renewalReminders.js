@@ -31,3 +31,14 @@ export function qualifiesForReminder(license, now = new Date()) {
 export function reminderKindFor(license) {
   return license?.auto_renew ? 'renewal_fyi' : 'renewal'
 }
+
+// Estados en los que NO se auto-renueva aunque el tenant tenga cobro automático:
+// una baja/pausa hecha a propósito por el operador no debe revivir sola.
+const NO_AUTO_STATUS = new Set(['suspended', 'canceled', 'cancelled', 'view_only'])
+
+// ¿Corresponde extender la licencia automáticamente este día 1? Sí cuando está en
+// cobro automático y su estado no es una baja/pausa deliberada.
+export function shouldAutoRenew(license) {
+  if (!license?.auto_renew) return false
+  return !NO_AUTO_STATUS.has(String(license.status ?? '').toLowerCase())
+}
