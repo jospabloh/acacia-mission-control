@@ -8,6 +8,7 @@ import { bridgeConfigured } from '../_lib/appBridge.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
 import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
+import { sweepAutoCloseForApp } from '../_lib/sweepResolvedTickets.js'
 import { probeAppHealth } from '../_lib/sync/syncHealth.js'
 
 export default async function handler(req, res) {
@@ -34,6 +35,9 @@ export default async function handler(req, res) {
       try { row.licenses = await syncLicensesForApp(app) } catch (e) { row.licenses = { error: e.message } }
       try { row.usage = await syncUsageForApp(app, day) } catch (e) { row.usage = { error: e.message } }
       try { row.tickets = await syncTicketsForApp(app) } catch (e) { row.tickets = { error: e.message } }
+      // After the sync reflects each app's latest state, close tickets that have
+      // sat "resolved" past the grace window with no further requester activity.
+      try { row.autoClose = await sweepAutoCloseForApp(app) } catch (e) { row.autoClose = { error: e.message } }
     }
     summary.push(row)
   }
