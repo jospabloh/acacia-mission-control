@@ -19,10 +19,13 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ error: error.message })
   const rows = data ?? []
 
-  // Catalog attribution: map each pageview to the registry app with the same host
-  // and the LONGEST matching path prefix. A "site" row (prefix "/") then counts
-  // ALL its pages (/, /mundial-2026, /servicios…), while sub-sites (/baristop,
-  // /freeware/*) keep their own slice. www. is normalized away.
+  // Catalog attribution: map each pageview to EVERY registry app whose host matches
+  // and whose path prefix contains it. Attribution is nested, not exclusive: a "site"
+  // row (prefix "/") counts ALL its pages (/, /mundial-2026, /servicios…) AND each
+  // sub-site (/baristop, /mundial-2026, /freeware/*) also keeps its own slice — the
+  // same pageview to /mundial-2026 counts for both the root site and that micro-site.
+  // (A single longest-prefix winner would rob the root of every sub-site's traffic.)
+  // www. is normalized away.
   const norm = (h) => (h || '').replace(/^www\./i, '').toLowerCase()
   const { data: appRows } = await supabaseAdmin.from('apps').select('id, url')
   const catalog = (appRows ?? []).flatMap((a) => {
@@ -31,13 +34,13 @@ export default async function handler(req, res) {
   })
   function attribute(host, path) {
     const h = norm(host)
-    let best = null
+    const ids = []
     for (const c of catalog) {
       if (c.host !== h) continue
       const ok = c.prefix === '' ? true : (path === c.prefix || path.startsWith(c.prefix + '/'))
-      if (ok && (!best || c.prefix.length > best.prefix.length)) best = c
+      if (ok) ids.push(c.id)
     }
-    return best?.id ?? null
+    return ids
   }
 
   // Per-path rollups (top routes) + per-app rollups (catalog cards).
@@ -52,8 +55,7 @@ export default async function handler(req, res) {
     if (r.day >= since7) a.visits7++
     byDay[r.day] = (byDay[r.day] ?? 0) + 1
 
-    const appId = attribute(r.host, r.path)
-    if (appId) {
+    for (const appId of attribute(r.host, r.path)) {
       const b = (byApp[appId] ??= { visits30: 0, visitors: new Set(), visits7: 0 })
       b.visits30++
       if (r.visitor) b.visitors.add(r.visitor)
