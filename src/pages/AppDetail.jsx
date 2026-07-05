@@ -5,6 +5,7 @@ import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
 import { runSync, emailStatus } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import { SessionsPanel } from '../components/SessionsPanel.jsx'
 import { Icon } from '../components/icons.jsx'
 
 const STATUS_LABEL = { active: 'Activas', trial: 'En prueba', view_only: 'Solo lectura', past_due: 'Vencidas', canceled: 'Canceladas', desconocido: 'Sin estado' }
@@ -170,6 +171,7 @@ export function AppDetail() {
   const t = data?.totals
   const operable = app.backend === 'base44'
   const emailCap = !!app.config?.email_log
+  const sessionCap = !!app.config?.session_entity
 
   return (
     <div>
@@ -220,6 +222,9 @@ export function AppDetail() {
           <p className={`mt-3 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>
         )}
       </div>
+
+      {/* Sesiones activas (live, por usuario, con desconexión forzada) */}
+      <SessionsPanel appId={appId} supported={sessionCap} />
 
       {/* Analytics */}
       {t && (

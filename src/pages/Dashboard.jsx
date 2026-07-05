@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { webKpis } from '../lib/control.js'
+import { aggregateByApp } from '../lib/sessionsView.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { Icon } from '../components/icons.jsx'
 
@@ -19,7 +20,7 @@ const SECTIONS = [
 // SaaS app: a control panel door — live status + synced stats. The whole card
 // opens the in-app control + analytics view (NOT the live app). A tiny "abrir ↗"
 // is the only escape hatch to the running app.
-function AppCard({ app, stat }) {
+function AppCard({ app, stat, sess }) {
   return (
     <div className="group relative rounded-xl border border-hair bg-paper-card hover:border-brand/40 hover:shadow-card transition">
       <a href={app.url} target="_blank" rel="noreferrer" title="Abrir la app"
@@ -37,6 +38,21 @@ function AppCard({ app, stat }) {
           <span className="h-3 w-px bg-hair" />
           <span className="text-ink"><span className="font-display font-semibold">{stat?.active ?? 0}</span><span className="text-ink-faint">/{stat?.licenses ?? 0}</span> <span className="text-ink-mute">licencias</span></span>
         </div>
+        {sess && (
+          <div className="mt-3 flex items-center gap-2 border-t border-dashed border-hair pt-2.5 text-sm">
+            <span className={`h-2 w-2 rounded-full ${sess.online > 0 ? 'bg-emerald-500' : sess.open > 0 ? 'bg-amber-400' : 'bg-ink-faint'}`} />
+            {sess.open > 0 ? (
+              <>
+                <span className="text-ink"><span className="font-display font-semibold">{sess.open}</span> <span className="text-ink-mute">{sess.open === 1 ? 'sesión' : 'sesiones'}</span></span>
+                {sess.online > 0
+                  ? <span className="text-xs font-medium text-emerald-600">· {sess.online} en línea</span>
+                  : <span className="text-xs text-ink-mute">· todas idle</span>}
+              </>
+            ) : (
+              <span className="text-xs text-ink-faint">sin sesiones abiertas</span>
+            )}
+          </div>
+        )}
         <div className="mt-2 text-xs text-ink-faint">{BACKEND_LABEL[app.backend] ?? app.backend}</div>
         <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand group-hover:text-brand-deep">
           Control y analíticas <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
@@ -91,6 +107,7 @@ export function Dashboard() {
   const [stats, setStats] = useState({})
   const [kpis, setKpis] = useState(null) // { path: { visits30, visitors30, visits7 } }
   const [byApp, setByApp] = useState({}) // appId -> { visits30, visitors30, visits7 }
+  const [sessByApp, setSessByApp] = useState({}) // appId -> { open, online }
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -107,6 +124,10 @@ export function Dashboard() {
       setStats(s)
     })
 
+    // Open sessions per app from the synced bodega copy (cheap; one query).
+    supabase.from('app_sessions').select('app_id, last_active_at, revoked_at')
+      .then(({ data }) => setSessByApp(aggregateByApp(data ?? [], Date.now())))
+
     webKpis().then((r) => { setKpis(r.kpis ?? {}); setByApp(r.byApp ?? {}) }).catch(() => { setKpis({}); setByApp({}) })
   }, [])
 
@@ -121,8 +142,10 @@ export function Dashboard() {
   const totals = useMemo(() => {
     const tenants = Object.values(stats).reduce((n, x) => n + x.tenants, 0)
     const active = Object.values(stats).reduce((n, x) => n + x.active, 0)
-    return { products: apps.length, saas: byCat.app.length, tenants, active }
-  }, [apps, stats, byCat])
+    const sessions = Object.values(sessByApp).reduce((n, x) => n + x.open, 0)
+    const online = Object.values(sessByApp).reduce((n, x) => n + x.online, 0)
+    return { products: apps.length, saas: byCat.app.length, tenants, active, sessions, online }
+  }, [apps, stats, byCat, sessByApp])
 
   return (
     <div>
@@ -130,11 +153,12 @@ export function Dashboard() {
 
       {error && <p className="mb-4 text-sm text-red-600">No se pudo leer el registro: {error}</p>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Productos" value={totals.products} accent hint="en el portafolio" />
         <StatCard label="Apps SaaS" value={totals.saas} hint="con backend operable" />
         <StatCard label="Tenants" value={totals.tenants} hint="clientes sincronizados" />
         <StatCard label="Licencias activas" value={totals.active} hint="al día de hoy" />
+        <StatCard label="Sesiones activas" value={totals.sessions} hint={`${totals.online} en línea ahora`} />
       </div>
 
       {SECTIONS.map(({ key, label, sub }) => {
@@ -152,7 +176,7 @@ export function Dashboard() {
 
             {key === 'app' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {items.map((a) => <AppCard key={a.id} app={a} stat={stats[a.id]} />)}
+                {items.map((a) => <AppCard key={a.id} app={a} stat={stats[a.id]} sess={sessByApp[a.id]} />)}
               </div>
             ) : (
               <>

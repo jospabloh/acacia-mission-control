@@ -8,6 +8,7 @@ import { requireMember } from '../requireMember.js'
 import { syncLicensesForApp } from '../sync/syncLicenses.js'
 import { syncUsageForApp } from '../sync/syncUsage.js'
 import { syncTicketsForApp } from '../sync/syncTickets.js'
+import { syncSessionsForApp } from '../sync/syncSessions.js'
 import { probeAppHealth } from '../sync/syncHealth.js'
 
 export default async function handler(req, res) {
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
 
   // Health works for any backend (bridge ping or HTTP probe). The data syncs
   // need the Base44 bridge.
-  const dataKinds = ['licenses', 'usage', 'tickets'].filter((k) => kinds.includes(k))
+  const dataKinds = ['licenses', 'usage', 'tickets', 'sessions'].filter((k) => kinds.includes(k))
   if (dataKinds.length && app.backend !== 'base44') {
     return res.status(400).json({ error: 'esta app no tiene puente operable' })
   }
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
     if (kinds.includes('licenses')) result.licenses = await syncLicensesForApp(app)
     if (kinds.includes('usage')) result.usage = await syncUsageForApp(app, new Date().toISOString().slice(0, 10))
     if (kinds.includes('tickets')) result.tickets = await syncTicketsForApp(app)
+    if (kinds.includes('sessions')) result.sessions = await syncSessionsForApp(app)
   } catch (e) {
     return res.status(502).json({ error: e.message, partial: result })
   }

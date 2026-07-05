@@ -14,6 +14,8 @@ import listContacts from '../_lib/control/list-contacts.js'
 import usageByTenant from '../_lib/control/usage-by-tenant.js'
 import emailStatus from '../_lib/control/email-status.js'
 import members from '../_lib/control/members.js'
+import sessions from '../_lib/control/sessions.js'
+import sessionRevoke from '../_lib/control/session-revoke.js'
 
 const ROUTES = {
   'run-sync': runSync,
@@ -24,6 +26,8 @@ const ROUTES = {
   'usage-by-tenant': usageByTenant,
   'email-status': emailStatus,
   'members': members,
+  'sessions': sessions,
+  'session-revoke': sessionRevoke,
 }
 
 export default async function handler(req, res) {
