@@ -84,8 +84,9 @@ export function summarize(sessions) {
 // ── Revoke enforcement (the 30-min rule, server-side) ────────────────────────
 
 // Can the operator close ONE session right now? Active sessions (<30min idle) are
-// blocked unless the operator is `owner` AND explicitly overrides.
-export function canRevoke(session, { role, override } = {}, now) {
+// blocked unless the operator is `owner` AND explicitly overrides. Acts on the
+// already-derived `session.state`, so no clock is needed.
+export function canRevoke(session, { role, override } = {}) {
   if (session.state === 'idle') return { ok: true }
   // online → protected
   if (override && role === 'owner') return { ok: true, forced: true }
@@ -98,8 +99,8 @@ export function canRevoke(session, { role, override } = {}, now) {
 }
 
 // Split a user's sessions for the bulk "close all idle" action: revoke the idle
-// ones, skip (and count) the active ones.
-export function partitionForBulk(sessions, now) {
+// ones, skip (and count) the active ones. Uses the derived `state`.
+export function partitionForBulk(sessions) {
   const closable = []
   let skippedActive = 0
   for (const s of sessions) {

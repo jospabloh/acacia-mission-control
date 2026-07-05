@@ -49,7 +49,7 @@ export default async function handler(req, res) {
   if (scope === 'user-idle') {
     if (!userEmail) return res.status(400).json({ error: 'falta userEmail' })
     const userSessions = sessions.filter((s) => s.user_email === userEmail)
-    const part = partitionForBulk(userSessions, now)
+    const part = partitionForBulk(userSessions)
     toRevoke = part.closableIds
     skippedActive = part.skippedActive
   } else {
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     for (const id of ids) {
       const s = byId.get(String(id))
       if (!s) continue // already gone / revoked — nothing to do
-      const verdict = canRevoke(s, { role: member.role, override: !!override }, now)
+      const verdict = canRevoke(s, { role: member.role, override: !!override })
       if (verdict.ok) toRevoke.push(s.external_id)
       else blocked.push({ id: s.external_id, user_email: s.user_email, device: s.device, idle_ms: s.idle_ms, reason: verdict.reason })
     }
