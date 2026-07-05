@@ -75,3 +75,18 @@ export function setMemberRole(userId, role) {
 export function removeMember(userId) {
   return postControl('/api/control/members', { op: 'remove', userId })
 }
+
+// ── Sesiones activas ─────────────────────────────────────────────────────────
+// Live per-user session list for one app (read-only). Returns
+// { totals:{open,online,idle}, users:[{user_email,user_name,online,idle,sessions:[…]}] }.
+export function appSessions(appId) {
+  return postControl('/api/control/sessions', { appId })
+}
+
+// WRITE: force-logout sessions. scope:'session' revokes ids (an ACTIVE session
+// needs opts.override AND owner role — otherwise the server replies 409 with
+// { blocked }). scope:'user-idle' revokes all of userEmail's idle sessions and
+// skips the active ones (reported as skipped_active).
+export function revokeSessions(appId, { scope = 'session', ids, userEmail, override } = {}) {
+  return postControl('/api/control/session-revoke', { appId, scope, ids, userEmail, override })
+}
