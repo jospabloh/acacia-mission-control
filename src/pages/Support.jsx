@@ -53,6 +53,59 @@ function slaBadge(row) {
     : { label: `SLA ${txt}`, cls: mins <= 120 ? 'bg-amber-50 text-amber-700' : 'bg-paper-subtle text-ink-mute' }
 }
 
+// Structured "BA/PO brief" the apps' AI intake assistant attaches to a ticket
+// (raw.ai_brief). It turns a raw "no funciona" into a spec a developer can design
+// and implement from. Rendered read-only; the same content is also embedded in
+// the ticket body as Markdown, so this card is an enhanced view, not the only copy.
+function List({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return null
+  return <ul className="list-disc pl-4 space-y-0.5 text-ink-soft">{items.map((x, i) => <li key={i}>{String(x)}</li>)}</ul>
+}
+function Field({ label, children }) {
+  if (!children || (Array.isArray(children) && children.length === 0)) return null
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
+      <div className="mt-0.5 text-ink-soft">{children}</div>
+    </div>
+  )
+}
+function AiBrief({ brief }) {
+  if (!brief || typeof brief !== 'object') return null
+  const isBug = brief.kind === 'bug'
+  return (
+    <div className="mb-4 rounded-lg border border-brand/20 bg-brand/[0.03] p-3 text-sm">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+          ✦ Brief BA/PO · {isBug ? 'Incidencia' : 'Nueva funcionalidad'}
+        </span>
+        {brief.severity && <span className="text-[11px] text-ink-faint">Severidad: {brief.severity}</span>}
+        {brief.priority_suggestion && <span className="text-[11px] text-ink-faint">· Prioridad sugerida: {brief.priority_suggestion}</span>}
+      </div>
+      <div className="space-y-2.5">
+        {brief.summary && <p className="text-ink-soft">{brief.summary}</p>}
+        <Field label="Área / pantalla">{brief.affected_area}</Field>
+        {!isBug ? (
+          <>
+            <Field label="Historia de usuario">{brief.user_story}</Field>
+            <Field label="Criterios de aceptación"><List items={brief.acceptance_criteria} /></Field>
+            <Field label="Incluye"><List items={brief.scope_in} /></Field>
+            <Field label="No incluye"><List items={brief.scope_out} /></Field>
+          </>
+        ) : (
+          <>
+            <Field label="Pasos para reproducir"><List items={brief.repro_steps} /></Field>
+            <Field label="Esperado">{brief.expected_behavior}</Field>
+            <Field label="Actual">{brief.actual_behavior}</Field>
+          </>
+        )}
+        <Field label="Impacto">{brief.impact}</Field>
+        <Field label="Preguntas abiertas"><List items={brief.open_questions} /></Field>
+      </div>
+    </div>
+  )
+}
+
 export function Support() {
   const [rows, setRows] = useState(null) // null = loading
   const [filterApp, setFilterApp] = useState('all')
@@ -66,7 +119,7 @@ export function Support() {
 
   const load = useCallback(() => {
     return supabase.from('tickets')
-      .select('id, app_id, external_id, ticket_number, subject, status, priority, requester, last_activity_at, created_at, customer_created_at, sla_first_response_due_at, sla_resolve_due_at, source, apps(name), tenants(name)')
+      .select('id, app_id, external_id, ticket_number, subject, status, priority, requester, last_activity_at, created_at, customer_created_at, sla_first_response_due_at, sla_resolve_due_at, source, raw, apps(name), tenants(name)')
       .order('last_activity_at', { ascending: false, nullsFirst: false })
       .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
   }, [])
@@ -212,6 +265,8 @@ export function Support() {
                     {(STATUSES[sel.app_id] ?? []).filter((s) => s !== sel.status).map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+
+                {sel.raw?.ai_brief && <div className="mt-4"><AiBrief brief={sel.raw.ai_brief} /></div>}
 
                 <div className="mt-4 space-y-3 max-h-[44vh] overflow-y-auto pr-1">
                   {thread === null ? (
