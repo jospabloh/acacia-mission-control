@@ -203,7 +203,7 @@ export function AppDetail() {
           </div>
           {operable && (
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => doSync(['licenses', 'usage'], 'todo')} disabled={!!busy}
+              <button onClick={() => doSync(sessionCap ? ['licenses', 'usage', 'sessions'] : ['licenses', 'usage'], 'todo')} disabled={!!busy}
                 className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-deep disabled:opacity-50">
                 {busy === 'todo' ? 'Sincronizando…' : 'Sincronizar ahora'}
               </button>
@@ -215,6 +215,12 @@ export function AppDetail() {
                 className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:border-brand/40 disabled:opacity-50">
                 {busy === 'uso' ? '…' : 'Solo uso'}
               </button>
+              {sessionCap && (
+                <button onClick={() => doSync(['sessions'], 'sesiones')} disabled={!!busy}
+                  className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:border-brand/40 disabled:opacity-50">
+                  {busy === 'sesiones' ? '…' : 'Solo sesiones'}
+                </button>
+              )}
             </div>
           )}
         </div>
