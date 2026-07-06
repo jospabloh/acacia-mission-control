@@ -4,6 +4,8 @@
 export const PILLARS = [
   { to: '/',              label: 'Dashboard',   icon: 'dashboard', minRole: 'viewer' },
   { to: '/licenses',      label: 'Licencias',   icon: 'license',   minRole: 'viewer' },
+  { to: '/tenants',       label: 'Tenants',     icon: 'crm',       minRole: 'viewer' },
+  { to: '/sessions',      label: 'Sesiones',    icon: 'control',   minRole: 'viewer' },
   { to: '/revenue',       label: 'Ingresos',    icon: 'revenue',   minRole: 'viewer' },
   { to: '/crm',           label: 'CRM',         icon: 'crm',       minRole: 'viewer' },
   { to: '/analytics',     label: 'Analítica',   icon: 'analytics', minRole: 'viewer' },

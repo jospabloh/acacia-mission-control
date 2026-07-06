@@ -4,6 +4,8 @@ import { LoginGate } from './components/LoginGate.jsx'
 import { Layout } from './components/Layout.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
 import { Licenses } from './pages/Licenses.jsx'
+import { Tenants } from './pages/Tenants.jsx'
+import { Sessions } from './pages/Sessions.jsx'
 import { Revenue } from './pages/Revenue.jsx'
 import { CRM } from './pages/CRM.jsx'
 import { Analytics } from './pages/Analytics.jsx'
@@ -23,6 +25,8 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="licenses" element={<Licenses />} />
+              <Route path="tenants" element={<Tenants />} />
+              <Route path="sessions" element={<Sessions />} />
               <Route path="revenue" element={<Revenue />} />
               <Route path="crm" element={<CRM />} />
               <Route path="analytics" element={<Analytics />} />

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Icon } from './icons.jsx'
 
 export function PageHeader({ title, subtitle, children }) {
@@ -12,13 +13,21 @@ export function PageHeader({ title, subtitle, children }) {
   )
 }
 
-export function StatCard({ label, value, hint, accent = false }) {
-  return (
-    <div className="rounded-xl border border-hair bg-paper-card p-5">
+// `to` makes the card a link to a dedicated detail view; omit for a plain,
+// non-interactive stat (no `to` → no hover/cursor affordance).
+export function StatCard({ label, value, hint, accent = false, to }) {
+  const body = (
+    <>
       <div className="text-xs font-medium uppercase tracking-wide text-ink-mute">{label}</div>
       <div className={`mt-2 font-display text-3xl font-semibold ${accent ? 'text-brand' : 'text-ink'}`}>{value}</div>
       {hint && <div className="mt-1 text-xs text-ink-faint">{hint}</div>}
-    </div>
+    </>
+  )
+  if (!to) return <div className="rounded-xl border border-hair bg-paper-card p-5">{body}</div>
+  return (
+    <Link to={to} className="block rounded-xl border border-hair bg-paper-card p-5 transition hover:border-brand/40 hover:shadow-card">
+      {body}
+    </Link>
   )
 }
 

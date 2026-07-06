@@ -156,9 +156,9 @@ export function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Productos" value={totals.products} accent hint="en el portafolio" />
         <StatCard label="Apps SaaS" value={totals.saas} hint="con backend operable" />
-        <StatCard label="Tenants" value={totals.tenants} hint="clientes sincronizados" />
-        <StatCard label="Licencias activas" value={totals.active} hint="al día de hoy" />
-        <StatCard label="Sesiones activas" value={totals.sessions} hint={`${totals.online} en línea ahora`} />
+        <StatCard label="Tenants" value={totals.tenants} hint="clientes sincronizados" to="/tenants" />
+        <StatCard label="Licencias activas" value={totals.active} hint="al día de hoy" to="/licenses" />
+        <StatCard label="Sesiones activas" value={totals.sessions} hint={`${totals.online} en línea ahora`} to="/sessions" />
       </div>
 
       {SECTIONS.map(({ key, label, sub }) => {
