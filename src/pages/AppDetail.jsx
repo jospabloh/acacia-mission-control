@@ -175,7 +175,10 @@ export function AppDetail() {
 
   return (
     <div>
-      <div className="mb-1"><Link to="/" className="text-xs text-ink-mute hover:text-ink">← Portafolio</Link></div>
+      <Link to="/"
+        className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-hair bg-paper-card px-3 py-1.5 text-sm font-medium text-ink-mute hover:border-brand/40 hover:text-brand">
+        <span aria-hidden="true">←</span> Volver al portafolio
+      </Link>
       <PageHeader
         title={app.name}
         subtitle={`${BACKEND_LABEL[app.backend] ?? app.backend}${app.external_id ? ` · ${app.external_id}` : ''} · control y analíticas`}
