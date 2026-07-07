@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { revokeSessions } from '../lib/control.js'
@@ -13,6 +13,8 @@ export function Sessions() {
   const [rows, setRows] = useState(null) // null = loading
   const [busy, setBusy] = useState(null) // row id being closed
   const [flash, setFlash] = useState(null)
+  const [appFilter, setAppFilter] = useState('all')
+  const [userFilter, setUserFilter] = useState('all')
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('app_sessions')
@@ -38,11 +40,50 @@ export function Sessions() {
 
   const now = Date.now()
 
+  // Options are derived from whatever's actually in the list, so the filters
+  // never show an app/user with zero open sessions.
+  const appOptions = useMemo(() => {
+    const m = new Map()
+    for (const r of rows ?? []) if (r.app_id) m.set(r.app_id, r.apps?.name ?? r.app_id)
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [rows])
+  const userOptions = useMemo(() => {
+    const m = new Map()
+    for (const r of rows ?? []) {
+      const key = r.user_email || r.user_name
+      if (key) m.set(key, r.user_name || r.user_email)
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [rows])
+  const filtered = (rows ?? []).filter((r) =>
+    (appFilter === 'all' || r.app_id === appFilter) &&
+    (userFilter === 'all' || r.user_email === userFilter || r.user_name === userFilter))
+
   return (
     <div>
       <PageHeader title="Sesiones activas" subtitle="Sesiones abiertas de todas las apps del portafolio, en vivo." />
 
       {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+
+      {rows !== null && rows.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <select value={appFilter} onChange={(e) => setAppFilter(e.target.value)}
+            className="rounded-lg border border-hair bg-white px-3 py-1.5 text-ink">
+            <option value="all">Todas las apps</option>
+            {appOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+          <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)}
+            className="rounded-lg border border-hair bg-white px-3 py-1.5 text-ink">
+            <option value="all">Todos los usuarios</option>
+            {userOptions.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+          {(appFilter !== 'all' || userFilter !== 'all') && (
+            <button onClick={() => { setAppFilter('all'); setUserFilter('all') }}
+              className="text-xs font-medium text-ink-mute hover:text-brand">Limpiar filtros</button>
+          )}
+          <span className="text-ink-faint">{filtered.length} de {rows.length}</span>
+        </div>
+      )}
 
       {rows === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
@@ -50,6 +91,8 @@ export function Sessions() {
         <EmptyState icon="dashboard" title="Nadie con sesión abierta ahora">
           En cuanto un usuario inicie sesión en alguna app, aparecerá aquí.
         </EmptyState>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-ink-faint">Ningún resultado con esos filtros.</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-hair bg-paper-card">
           <table className="w-full text-sm">
@@ -61,7 +104,7 @@ export function Sessions() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {filtered.map((r) => {
                 const online = isRowOnline(r, now)
                 return (
                   <tr key={r.id} className="border-b border-hair last:border-0">
