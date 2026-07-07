@@ -30,6 +30,11 @@ export async function callBridge(app, action, params = {}) {
   } catch (e) {
     // Surface the bridge's real error (it returns { error } with a 4xx/5xx),
     // not the opaque axios "Request failed with status code N".
-    throw new Error(e?.response?.data?.error || e?.message || 'bridge error')
+    const message = e?.response?.data?.error || e?.message || 'bridge error'
+    // Errors like "bad signature" don't say which app — INGEST_HMAC_SECRET is one
+    // shared value signed against N per-app functions, so any one of them can drift
+    // independently. Log the app so Vercel logs alone can point at the culprit.
+    console.error(`callBridge failed: app=${app.id} (${app.name ?? app.external_id}) action=${action} error=${message}`)
+    throw new Error(message)
   }
 }
