@@ -109,3 +109,11 @@ export function partitionForBulk(sessions) {
   }
   return { closableIds: closable.map((s) => s.external_id), closable, skippedActive }
 }
+
+// "Log off user" — every one of a user's sessions, idle AND active. Unlike
+// partitionForBulk, nothing is skipped: this is a deliberate full bypass of the
+// active-session protection, reachable only via scope:'user-all' (owner-only,
+// override required — enforced in session-revoke.js, not here).
+export function idsForUserAll(sessions, userEmail) {
+  return sessions.filter((s) => s.user_email === userEmail).map((s) => s.external_id)
+}

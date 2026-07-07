@@ -4,17 +4,21 @@
 // computed from the app's real last_active_at, applies the rule, revokes, audits
 // and re-syncs the bodega. Admin-gated; forcing an ACTIVE session needs owner.
 //
-// POST { appId, scope: 'session' | 'user-idle', ids?, userEmail?, override? }
+// POST { appId, scope: 'session' | 'user-idle' | 'user-all', ids?, userEmail?, override? }
 //   - scope 'session'   → revoke the given session ids. Active (<30min idle) ones
 //                          are blocked unless override && role==='owner'. If any
 //                          requested id is blocked, nothing is revoked (409).
 //   - scope 'user-idle' → revoke ALL of userEmail's idle sessions, skip the
 //                          active ones (reported as skipped_active).
+//   - scope 'user-all'  → "log off user": revoke EVERY session of userEmail,
+//                          idle AND active — the one place the active-session
+//                          protection is bypassed in full, not just for one id.
+//                          owner-only, requires override:true.
 import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from '../appBridge.js'
 import { requireMember } from '../requireMember.js'
 import { syncSessionsForApp } from '../sync/syncSessions.js'
-import { normalizeOpenSessions, canRevoke, partitionForBulk } from '../sessions.js'
+import { normalizeOpenSessions, canRevoke, partitionForBulk, idsForUserAll } from '../sessions.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
@@ -52,6 +56,11 @@ export default async function handler(req, res) {
     const part = partitionForBulk(userSessions)
     toRevoke = part.closableIds
     skippedActive = part.skippedActive
+  } else if (scope === 'user-all') {
+    if (!userEmail) return res.status(400).json({ error: 'falta userEmail' })
+    if (member.role !== 'owner') return res.status(403).json({ error: 'solo el owner puede forzar el cierre de todas las sesiones' })
+    if (!override) return res.status(400).json({ error: 'confirma el forzado (override) para cerrar sesiones activas' })
+    toRevoke = idsForUserAll(sessions, userEmail)
   } else {
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'falta ids' })
     const blocked = []
@@ -84,7 +93,7 @@ export default async function handler(req, res) {
 
   await audit('control:session-revoke', {
     actor: member.user_id, actor_email: member.email, target_app: appId,
-    payload: { scope, ids: toRevoke, userEmail: userEmail ?? null, override: !!override, forced: scope === 'session' && !!override, skipped_active: skippedActive },
+    payload: { scope, ids: toRevoke, userEmail: userEmail ?? null, override: !!override, forced: (scope === 'session' || scope === 'user-all') && !!override, skipped_active: skippedActive },
   })
 
   return res.status(200).json({ ok: true, revoked: toRevoke.length, skipped_active: skippedActive, resync })
