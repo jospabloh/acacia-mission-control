@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard.jsx'
 import { Licenses } from './pages/Licenses.jsx'
 import { Tenants } from './pages/Tenants.jsx'
 import { Sessions } from './pages/Sessions.jsx'
+import { Products } from './pages/Products.jsx'
 import { Revenue } from './pages/Revenue.jsx'
 import { CRM } from './pages/CRM.jsx'
 import { Analytics } from './pages/Analytics.jsx'
@@ -27,6 +28,7 @@ export default function App() {
               <Route path="licenses" element={<Licenses />} />
               <Route path="tenants" element={<Tenants />} />
               <Route path="sessions" element={<Sessions />} />
+              <Route path="products" element={<Products />} />
               <Route path="revenue" element={<Revenue />} />
               <Route path="crm" element={<CRM />} />
               <Route path="analytics" element={<Analytics />} />

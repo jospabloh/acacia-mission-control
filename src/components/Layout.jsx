@@ -7,9 +7,12 @@ function initials(email = '') {
   return email.slice(0, 2).toUpperCase()
 }
 
+// Dedicated drill-down views reached from a Dashboard stat card, not the sidebar.
+const EXTRA_TITLES = { '/tenants': 'Tenants', '/sessions': 'Sesiones activas', '/products': 'Productos' }
+
 function currentTitle(pathname) {
   if (pathname.startsWith('/apps/')) return 'Detalle de app'
-  return PILLARS.find((p) => p.to === pathname)?.label ?? 'Mission Control'
+  return PILLARS.find((p) => p.to === pathname)?.label ?? EXTRA_TITLES[pathname] ?? 'Mission Control'
 }
 
 export function Layout() {
