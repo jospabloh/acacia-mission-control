@@ -96,6 +96,21 @@ function UserRow({ appId, user, isOwner, onChange }) {
     }
   }
 
+  // "Log off user": every session, idle AND active — unlike closeIdle, nothing is
+  // skipped. Owner-only (server-enforced too); always requires confirmation since
+  // it force-logs-out whatever the user is doing right now.
+  async function closeAll() {
+    if (!window.confirm(`Cerrar TODAS las sesiones de ${user.user_name || user.user_email} (${user.sessions.length}, incluye ${activeCount} activa${activeCount === 1 ? '' : 's'})?\n\nEl usuario deberá iniciar sesión de nuevo en todos sus dispositivos.`)) return
+    setBusy(true)
+    try {
+      const r = await revokeSessions(appId, { scope: 'user-all', userEmail: user.user_email, override: true })
+      onChange(`${r.revoked} sesión${r.revoked === 1 ? '' : 'es'} cerrada${r.revoked === 1 ? '' : 's'} · usuario deberá iniciar sesión de nuevo`)
+    } catch (e) {
+      onChange(e.message, true)
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="border-b border-hair last:border-0">
       <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
@@ -131,6 +146,12 @@ function UserRow({ appId, user, isOwner, onChange }) {
               className="ml-auto rounded-lg bg-ink px-2.5 py-1 text-xs font-semibold text-paper hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-40">
               {busy ? '…' : `Cerrar sesiones idle (${idleCount})`}
             </button>
+            {isOwner && (
+              <button onClick={closeAll} disabled={busy}
+                className="rounded-lg border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
+                {busy ? '…' : 'Cerrar todo (log off)'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -198,7 +219,7 @@ export function SessionsPanel({ appId, supported }) {
         <p>
           Cerrar una sesión obliga al usuario a volver a iniciar sesión (sale en su próximo latido, ~1 min). La acción masiva
           cierra <span className="font-semibold text-ink">solo sesiones inactivas ≥ 30 min</span>. Una sesión activa está protegida
-          {isOwner ? <> — como <span className="font-semibold text-ink">owner</span> puedes forzarla con confirmación.</> : <> y solo el <span className="font-semibold text-ink">owner</span> puede forzarla.</>}
+          {isOwner ? <> — como <span className="font-semibold text-ink">owner</span> puedes forzarla con confirmación, o usar <span className="font-semibold text-ink">Cerrar todo (log off)</span> para desconectar a un usuario de todos sus dispositivos a la vez.</> : <> y solo el <span className="font-semibold text-ink">owner</span> puede forzarla.</>}
         </p>
       </div>
 

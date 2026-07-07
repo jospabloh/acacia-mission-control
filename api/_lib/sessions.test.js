@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   IDLE_MS, OPEN_WINDOW_MS,
   idleMs, isOpen, sessionState, normalizeSession, normalizeOpenSessions,
-  groupByUser, summarize, canRevoke, partitionForBulk,
+  groupByUser, summarize, canRevoke, partitionForBulk, idsForUserAll,
 } from './sessions.js'
 
 // Fixed clock so every assertion is deterministic.
@@ -107,4 +107,15 @@ test('partitionForBulk closes idle, skips (and counts) active', () => {
   const { closableIds, skippedActive } = partitionForBulk(sessions, NOW)
   assert.deepEqual(closableIds.sort(), ['idle1', 'idle2'])
   assert.equal(skippedActive, 1)
+})
+
+test('idsForUserAll returns every session of a user, idle AND active, and none of another user\'s', () => {
+  const sessions = normalizeOpenSessions([
+    { id: 'idle1', user_email: 'a@x.mx', last_active_at: ago(40 * 60_000) },
+    { id: 'live1', user_email: 'a@x.mx', last_active_at: ago(30_000) },
+    { id: 'other', user_email: 'b@x.mx', last_active_at: ago(30_000) },
+  ], NOW)
+  assert.deepEqual(idsForUserAll(sessions, 'a@x.mx').sort(), ['idle1', 'live1'])
+  assert.deepEqual(idsForUserAll(sessions, 'b@x.mx'), ['other'])
+  assert.deepEqual(idsForUserAll(sessions, 'nobody@x.mx'), [])
 })
