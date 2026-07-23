@@ -52,6 +52,20 @@ const APPS = {
       nameField: 'author_name', tsField: 'created_date', rich: true,
     },
   },
+  // CateqHub (parish QR attendance) mirrors the puntos rich model; tenant FK is parish_id.
+  cateqhub: {
+    entity: 'SupportTicket', tenantField: 'parish_id',
+    subjectField: 'subject', statusField: 'status', priorityField: 'priority',
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
+    openStatus: 'open', inProgressStatus: 'in_progress',
+    resolvedField: 'resolved_at', closedField: 'closed_at',
+    thread: {
+      mode: 'message', messageEntity: 'SupportTicketMessage', fkField: 'ticket_id',
+      bodyField: 'body', roleField: 'author_role', staffRole: 'owner', customerRole: 'tenant',
+      nameField: 'author_name', tsField: 'created_date', rich: true,
+    },
+  },
   // Radar (HR/attendance) mirrors the puntos rich model; tenant FK is company_id.
   radar: {
     entity: 'SupportTicket', tenantField: 'company_id',
