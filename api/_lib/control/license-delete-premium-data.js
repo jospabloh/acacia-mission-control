@@ -4,13 +4,13 @@
 // que sube el piso de autorización a `owner` y exige, del lado del servidor,
 // que la exportación ya haya sido confirmada — nunca confía en el estado que
 // mande el cliente.
-import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { requireMember } from '../_lib/requireMember.js'
-import { licenseControlFor } from '../_lib/licenseControl.js'
-import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
-import { messagingFor } from '../_lib/messaging.js'
-import { resolveRecipients, sendFollowup } from '../_lib/emailFollowup.js'
+import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { requireMember } from '../requireMember.js'
+import { licenseControlFor } from '../licenseControl.js'
+import { syncLicensesForApp } from '../sync/syncLicenses.js'
+import { messagingFor } from '../messaging.js'
+import { resolveRecipients, sendFollowup } from '../emailFollowup.js'
 
 // Exportado para test unitario — la licencia trae `raw` (registro completo del
 // app, ver syncLicenses.js) donde vive export_confirmed_at (sin columna propia
@@ -105,15 +105,21 @@ export default async function handler(req, res) {
 
     // Paso 2: reset del estado de licencia, vía la acción genérica ya existente
     // (así el mirror hacia User se aplica igual que en cualquier otro license.set).
+    // El plan "gratis" se deriva de cfg (cualquier plan de cfg.plans que NO esté
+    // en lifecycle.paidPlanValues) en vez de escribir 'free' fijo — para que
+    // esto siga siendo correcto si algún día otra app se suma a `lifecycle` con
+    // un nombre de plan gratuito distinto.
+    const freePlan = cfg.plans.find((p) => !cfg.lifecycle.paidPlanValues.includes(p)) ?? cfg.plans[0]
+    const activeStatus = cfg.statuses.active
     const resetPatch = {
-      [cfg.planField]: 'free', [cfg.statusField]: 'active',
+      [cfg.planField]: freePlan, [cfg.statusField]: activeStatus,
       [cfg.lifecycle.sinceFields.read_only]: null,
       [cfg.lifecycle.sinceFields.access_denied]: null,
       [cfg.lifecycle.sinceFields.deletion_eligible]: null,
       [cfg.lifecycle.exportConfirmedField]: null,
     }
     const mirror = cfg.mirror
-      ? [{ entity: cfg.mirror.entity, matchField: cfg.mirror.matchField, fields: { [cfg.mirror.fields.plan]: 'free', [cfg.mirror.fields.license_status]: 'active' } }]
+      ? [{ entity: cfg.mirror.entity, matchField: cfg.mirror.matchField, fields: { [cfg.mirror.fields.plan]: freePlan, [cfg.mirror.fields.license_status]: activeStatus } }]
       : undefined
     await callBridge(app, 'license.set', { entity: cfg.entity, id: licenseExternalId, patch: resetPatch, mirror })
 
