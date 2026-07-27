@@ -738,11 +738,14 @@ git commit -m "Agregar cron diario license-lifecycle (ciclo de vida Premium de C
 
 ---
 
-### Task 6: `api/control/license-delete-premium-data.js` — owner-gated deletion endpoint
+### Task 6: `api/_lib/control/license-delete-premium-data.js` — owner-gated deletion endpoint
+
+**Correction (found during implementation):** this plan originally specified `api/control/license-delete-premium-data.js` as a new top-level file. That's wrong for this repo — `api/control/[action].js` is a single dynamic route that dispatches every `/api/control/<action>` request to a handler under `api/_lib/control/` specifically so Vercel's Hobby-plan 12-function cap isn't spent one-per-endpoint (see the comment at the top of `[action].js`). The handler lives at `api/_lib/control/license-delete-premium-data.js`, registered in `[action].js`'s `ROUTES` map under the key `'license-delete-premium-data'`. The client-facing URL (`/api/control/license-delete-premium-data`) and request/response shapes below are unaffected — only the file's location and the fact that it needs a `ROUTES` entry changed.
 
 **Files:**
-- Create: `api/control/license-delete-premium-data.js`
-- Create: `api/control/license-delete-premium-data.test.js`
+- Create: `api/_lib/control/license-delete-premium-data.js`
+- Create: `api/_lib/control/license-delete-premium-data.test.js`
+- Modify: `api/control/[action].js` (import + `ROUTES` entry)
 - Modify: `src/lib/control.js`
 
 **Interfaces:**
@@ -1073,6 +1076,13 @@ to:
 ```js
 const STATUS_VALUES = {
   cateqhub: { active: 'active', suspend: 'access_denied', view_only: 'read_only' },
+}
+```
+
+**Correction (post-implementation review):** the `statusValue()` fallback in Step 1 (`STATUS_VALUES[appId]?.[op] ?? op`) is itself a bug for the other 5 apps — `op` is `'suspend'`, but their stored status string is `'suspended'` (a different string), so `statusValue(appId, 'suspend')` returned the literal `'suspend'` for every app not in `STATUS_VALUES`, making `r.status !== statusValue(r.app_id, 'suspend')` always true and breaking "Pausar" button visibility (always shown, even when already suspended) for flowfin/stockflow/rumbo/liuma/puntos. `active`/`view_only` happened to match by coincidence, masking it. Fix: add a `DEFAULT_STATUS_VALUES = { active: 'active', suspend: 'suspended', view_only: 'view_only' }` map and fall through to it before falling through to `op`:
+```js
+function statusValue(appId, op) {
+  return STATUS_VALUES[appId]?.[op] ?? DEFAULT_STATUS_VALUES[op] ?? op
 }
 ```
 

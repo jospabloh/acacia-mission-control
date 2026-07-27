@@ -31,6 +31,10 @@ export const APP_MSG = {
     name: 'Puntos+', entity: 'Business', value: 'tu programa de lealtad activo',
     recipient: { fields: ['contact_email', 'owner_email'], nameField: 'name' },
   },
+  cateqhub: {
+    name: 'CateqHub', entity: 'Parish', value: 'la asistencia y el catecismo de tu parroquia al día',
+    recipient: { related: { entity: 'User', keyField: 'parish_id', keyFromRecord: 'id', emailField: 'email', roleField: 'parish_role', roles: ['admin'] }, nameField: 'name' },
+  },
 }
 
 export function messagingFor(appId) { return APP_MSG[appId] ?? null }
@@ -133,6 +137,57 @@ ${ctx.body ? paras(ctx.body) : ''}
 <p>Te avisamos que <span class="hi">${esc(app.name)}</span> tendrá una ventana de <strong>mantenimiento programado</strong>${win ? ` ${win}` : ''}. Durante ese lapso el servicio podría no estar disponible por momentos.</p>
 ${ctx.body ? paras(ctx.body) : ''}
 <p>Gracias por tu comprensión — lo hacemos para que <strong>${esc(app.value)}</strong> siga funcionando mejor.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'premium_read_only') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}Tutores en ${app.name} está en modo solo lectura`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Tu plan Premium de <span class="hi">${esc(app.name)}</span> está pendiente de pago. Por ahora, <strong>agregar o editar Tutores</strong> quedó pausado — lo que ya registraste sigue visible sin cambios.</p>
+<p>El resto de ${esc(app.name)} (niños, grupos, asistencia) sigue funcionando normalmente, sin ninguna restricción.</p>
+<p>Confirma tu pago cuando puedas para reactivar Tutores. Cualquier duda, respóndenos este correo.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'premium_access_denied') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}acceso a Tutores denegado en ${app.name} — exporta tus datos`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Por falta de pago prolongada, el acceso a <strong>Tutores</strong> en <span class="hi">${esc(app.name)}</span> quedó denegado. El resto de la app (niños, grupos, asistencia) sigue funcionando normalmente.</p>
+<p>Puedes <strong>exportar (descargar) tus datos de Tutores</strong> directamente desde la pantalla de Premium dentro de ${esc(app.name)}, antes de que se eliminen. Solo tú, como administrador de tu parroquia, puedes hacerlo.</p>
+<p>Si confirmas tu pago, tu acceso se reactiva de inmediato.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'premium_read_only_reminder') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}recordatorio: Tutores sigue en solo lectura en ${app.name}`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Solo un recordatorio: tu plan Premium de <span class="hi">${esc(app.name)}</span> sigue pendiente de pago, así que Tutores continúa en modo solo lectura.</p>
+<p>Confirma tu pago cuando puedas para reactivarlo sin perder nada de lo ya registrado.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'premium_access_denied_reminder') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}recordatorio: exporta tus datos de Tutores en ${app.name}`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>El acceso a Tutores en <span class="hi">${esc(app.name)}</span> sigue denegado por falta de pago. Te recordamos que puedes <strong>descargar tus datos</strong> desde la pantalla de Premium antes de que se eliminen.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'premium_data_deleted_confirmation') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tus datos de Tutores en ${app.name} fueron eliminados`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Confirmamos que los datos de <strong>Tutores</strong> de tu parroquia en <span class="hi">${esc(app.name)}</span> fueron eliminados de la plataforma, tras haber confirmado tu exportación. El resto de tu información (niños, grupos, asistencia) no fue afectado.</p>
+<p>Puedes volver a usar Tutores en cualquier momento activando el plan Premium de nuevo.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }

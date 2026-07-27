@@ -1,17 +1,35 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { licenseAction } from '../lib/control.js'
+import { licenseAction, deletePremiumData } from '../lib/control.js'
 import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
 
 const STATUS_STYLE = {
   active: 'bg-emerald-50 text-emerald-700',
   trial: 'bg-blue-50 text-blue-700',
   view_only: 'bg-amber-50 text-amber-700',
+  read_only: 'bg-amber-50 text-amber-700',
   past_due: 'bg-amber-50 text-amber-700',
   suspended: 'bg-red-50 text-red-700',
+  access_denied: 'bg-red-50 text-red-700',
   canceled: 'bg-red-50 text-red-700',
   cancelled: 'bg-red-50 text-red-700',
   expired: 'bg-red-50 text-red-700',
+  deletion_eligible: 'bg-red-100 text-red-800 font-semibold',
+}
+
+// Mirror of api/_lib/licenseControl.js APPS[app].statuses (client can't import
+// server-only code). Only apps whose stored status strings differ from the
+// generic op names (active/suspended/view_only) need an entry — CateqHub uses
+// read_only/access_denied for clearer in-app copy (see the Premium license
+// lifecycle design doc).
+const STATUS_VALUES = {
+  cateqhub: { active: 'active', suspend: 'access_denied', view_only: 'read_only' },
+}
+// Every other app stores the literal op-derived strings below; only the op
+// name ('suspend') differs from the stored value ('suspended') by default.
+const DEFAULT_STATUS_VALUES = { active: 'active', suspend: 'suspended', view_only: 'view_only' }
+function statusValue(appId, op) {
+  return STATUS_VALUES[appId]?.[op] ?? DEFAULT_STATUS_VALUES[op] ?? op
 }
 
 // Mirror of api/_lib/licenseControl.js (client can't import server-only code).
@@ -21,8 +39,9 @@ const PLANS = {
   rumbo: ['trial', 'starter', 'pro', 'enterprise'],
   liuma: ['start', 'growth', 'plus'],
   puntos: ['starter', 'growth', 'pro', 'enterprise'],
+  cateqhub: ['free', 'premium'],
 }
-const HAS_VIEW_ONLY = new Set(['flowfin', 'stockflow', 'liuma', 'puntos']) // rumbo has no view_only
+const HAS_VIEW_ONLY = new Set(['flowfin', 'stockflow', 'liuma', 'puntos', 'cateqhub']) // rumbo has no view_only
 // Apps that support the renewal/payment-confirmation flow (all 5 today).
 const HAS_BILLING = new Set(['flowfin', 'stockflow', 'rumbo', 'liuma', 'puntos'])
 // Per-app expiry-day convention (mirror of api/_lib/licenseControl billing.dayConvention).
@@ -96,12 +115,14 @@ export function Licenses() {
   const [payEmail, setPayEmail] = useState(true) // enviar correo de confirmación
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(null) // { ok, msg }
+  const [del, setDel] = useState(null) // { row } — delete-premium-data modal
+  const [delTyped, setDelTyped] = useState('')
 
   const load = useCallback(async () => {
     const period = new Date().toISOString().slice(0, 7)
     const [{ data, error }, { data: rem }] = await Promise.all([
       supabase.from('licenses')
-        .select('id, external_id, app_id, plan, status, seats, current_period_end, trial_ends_at, auto_renew, apps(name), tenants(name)')
+        .select('id, external_id, app_id, plan, status, seats, current_period_end, trial_ends_at, auto_renew, raw, apps(name), tenants(name)')
         .order('synced_at', { ascending: false }),
       supabase.from('renewal_reminders')
         .select('app_id, external_id, renewed, verified, new_expiry').eq('period', period).eq('renewed', true),
@@ -122,6 +143,20 @@ export function Licenses() {
       await load()
       setFlash({ ok: true, msg: `${OP_COPY[op]?.label ?? 'Cambio de plan'} aplicado a ${row.tenants?.name ?? row.external_id}.` })
       setConfirm(null)
+    } catch (e) {
+      setFlash({ ok: false, msg: e.message })
+    } finally { setBusy(false) }
+  }
+
+  async function runDelete() {
+    if (!del) return
+    setBusy(true); setFlash(null)
+    const { row } = del
+    try {
+      const out = await deletePremiumData(row.app_id, row.external_id, delTyped)
+      await load()
+      setFlash({ ok: true, msg: `Datos Premium borrados para ${row.tenants?.name ?? row.external_id}: ${JSON.stringify(out.deletedCounts)}.` })
+      setDel(null); setDelTyped('')
     } catch (e) {
       setFlash({ ok: false, msg: e.message })
     } finally { setBusy(false) }
@@ -211,7 +246,12 @@ export function Licenses() {
                     <td className="px-4 py-3 font-medium text-ink">{r.apps?.name ?? r.app_id}</td>
                     <td className="px-4 py-3 text-ink-soft">{r.tenants?.name ?? <span className="text-ink-faint">—</span>}</td>
                     <td className="px-4 py-3 text-ink-soft">{r.plan ?? '—'}</td>
-                    <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{r.status ?? '—'}</span></td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{r.status ?? '—'}</span>
+                      {r.raw?.export_confirmed_at && (
+                        <div className="mt-1 text-[11px] text-emerald-600">✓ Exportación confirmada {fmtDate(r.raw.export_confirmed_at)}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs ${TONE_CLS[exp.tone]}`}>{exp.label}</span>
                       {exp.sub && <div className="text-[11px] text-ink-faint">{exp.sub}</div>}
@@ -235,14 +275,24 @@ export function Licenses() {
                             <button onClick={() => { setPay({ row: r }); setMonths(1); setPayRef(''); setPayEmail(true) }}
                               className="rounded-md border border-brand/30 bg-brand/5 px-2 py-1 text-xs font-medium text-brand hover:bg-brand/10">Confirmar pago</button>
                           )}
-                          {r.status !== 'active' && (
+                          {r.status !== statusValue(r.app_id, 'active') && (
                             <button onClick={() => ask(r, 'reactivate')} className={`rounded-md border px-2 py-1 text-xs font-medium ${OP_COPY.reactivate.cls}`}>Reactivar</button>
                           )}
-                          {r.status !== 'suspended' && (
+                          {r.status !== statusValue(r.app_id, 'suspend') && (
                             <button onClick={() => ask(r, 'suspend')} className={`rounded-md border px-2 py-1 text-xs font-medium ${OP_COPY.suspend.cls}`}>Pausar</button>
                           )}
-                          {HAS_VIEW_ONLY.has(r.app_id) && r.status !== 'view_only' && (
+                          {HAS_VIEW_ONLY.has(r.app_id) && r.status !== statusValue(r.app_id, 'view_only') && (
                             <button onClick={() => ask(r, 'view_only')} className={`rounded-md border px-2 py-1 text-xs font-medium ${OP_COPY.view_only.cls}`}>Solo lectura</button>
+                          )}
+                          {r.status === 'deletion_eligible' && (
+                            <button
+                              onClick={() => { setDel({ row: r }); setDelTyped('') }}
+                              disabled={!r.raw?.export_confirmed_at}
+                              title={r.raw?.export_confirmed_at ? undefined : 'El tenant aún no confirmó su exportación'}
+                              className="rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Borrar datos Premium
+                            </button>
                           )}
                           <select value="" onChange={(e) => e.target.value && ask(r, 'set_plan', e.target.value)}
                             className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-ink">
@@ -321,6 +371,30 @@ export function Licenses() {
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setPay(null)} disabled={busy} className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">Cancelar</button>
               <button onClick={runPayment} disabled={busy} className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-deep disabled:opacity-50">{busy ? 'Confirmando…' : 'Confirmar pago'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete-premium-data modal — the only destructive action here */}
+      {del && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/30 p-4" onClick={() => !busy && setDel(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-red-200 bg-paper-card p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-lg font-semibold text-red-800">Borrar datos Premium</h3>
+            <p className="mt-1 text-sm text-ink-soft">
+              {del.row.apps?.name ?? del.row.app_id} · <span className="font-medium text-ink">{del.row.tenants?.name ?? del.row.external_id}</span>
+            </p>
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+              Esto borra permanentemente los Tutores y las relaciones tutor-niño de esta parroquia. Los niños, grupos y asistencia NO se ven afectados. Esta acción no se puede deshacer.
+            </p>
+            <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-ink-mute">
+              Escribe el nombre exacto de la parroquia para confirmar: <span className="normal-case text-ink">{del.row.tenants?.name}</span>
+            </label>
+            <input value={delTyped} onChange={(e) => setDelTyped(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-hair bg-white px-3 py-1.5 text-sm text-ink" />
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setDel(null)} disabled={busy} className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">Cancelar</button>
+              <button onClick={runDelete} disabled={busy || delTyped !== del.row.tenants?.name} className="rounded-lg bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-40">{busy ? 'Borrando…' : 'Borrar datos Premium'}</button>
             </div>
           </div>
         </div>

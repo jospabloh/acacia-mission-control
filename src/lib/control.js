@@ -31,6 +31,13 @@ export function licenseAction(appId, licenseExternalId, op, plan, opts = {}) {
   return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan, ...opts })
 }
 
+// WRITE, destructiva: borra los datos Premium (Tutores) de un tenant, solo si
+// ya confirmó su propia exportación (el servidor lo revalida, no confía en el
+// cliente). Requiere rol owner y escribir el nombre exacto de la parroquia.
+export function deletePremiumData(appId, licenseExternalId, confirmParishName) {
+  return postControl('/api/control/license-delete-premium-data', { appId, licenseExternalId, confirmParishName })
+}
+
 // Read tenant recipient contacts for an app (for targeting comunicados).
 export function listContacts(appId) {
   return postControl('/api/control/list-contacts', { appId })

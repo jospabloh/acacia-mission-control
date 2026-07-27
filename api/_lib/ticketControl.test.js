@@ -7,7 +7,7 @@ const NOW_ISO = NOW.toISOString()
 
 // ── all 6 apps now persist tickets ───────────────────────────────────────────
 test('all portfolio apps have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['flowfin', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+  assert.deepEqual(ticketApps().sort(), ['cateqhub', 'flowfin', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
 })
 
 // ── stockflow / flowfin mirror the puntos rich model with a different tenant FK ─

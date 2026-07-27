@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLicenseChange, computeRenewalExpiry, billingFor } from './licenseControl.js'
+import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor } from './licenseControl.js'
 
 // Fixed clock so every assertion is deterministic.
 const NOW = new Date('2026-06-15T12:00:00Z')
@@ -108,4 +108,40 @@ test('every billing app exposes an expiry field + day convention', () => {
 test('invalid op / unknown app are rejected, not silently applied', () => {
   assert.ok(buildLicenseChange('flowfin', 'frobnicate', {}).error)
   assert.ok(buildLicenseChange('nope', 'confirm_payment', {}).error)
+})
+
+// ── cateqhub: no billing, mirror config, set_plan stamps premium_period_end_at ──
+
+test('cateqhub has no billing (Premium se activa manualmente, sin Mercado Pago hoy)', () => {
+  assert.equal(billingFor('cateqhub'), null)
+})
+
+test('cateqhub set_plan a premium estampa premium_period_end_at a +30 días', () => {
+  const NOW2 = new Date('2026-07-23T00:00:00Z')
+  const change = buildLicenseChange('cateqhub', 'set_plan', { plan: 'premium', now: NOW2 })
+  assert.equal(change.error, undefined)
+  assert.equal(change.patch.plan, 'premium')
+  assert.equal(change.patch.premium_period_end_at, '2026-08-22T00:00:00.000Z')
+})
+
+test('cateqhub set_plan a free NO estampa premium_period_end_at', () => {
+  const change = buildLicenseChange('cateqhub', 'set_plan', { plan: 'free' })
+  assert.equal(change.error, undefined)
+  assert.equal(change.patch.plan, 'free')
+  assert.equal(change.patch.premium_period_end_at, undefined)
+})
+
+test('cateqhub statuses mapean read_only/access_denied a las llaves genéricas view_only/suspended', () => {
+  const cfg = licenseControlFor('cateqhub')
+  assert.equal(cfg.statuses.view_only, 'read_only')
+  assert.equal(cfg.statuses.suspended, 'access_denied')
+  assert.equal(cfg.statuses.active, 'active')
+})
+
+test('cateqhub declara mirror hacia User (Base44 RLS no puede hacer lookup a Parish)', () => {
+  const cfg = licenseControlFor('cateqhub')
+  assert.deepEqual(cfg.mirror, {
+    entity: 'User', matchField: 'parish_id',
+    fields: { plan: 'parish_plan', license_status: 'parish_license_status' },
+  })
 })

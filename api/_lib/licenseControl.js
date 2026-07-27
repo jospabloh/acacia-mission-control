@@ -69,6 +69,34 @@ const APPS = {
       confirm_payment: 'license_renewed',
     } },
   },
+  cateqhub: {
+    entity: 'Parish', statusField: 'license_status', planField: 'plan',
+    statuses: { active: 'active', suspended: 'access_denied', view_only: 'read_only' },
+    plans: ['free', 'premium'],
+    // Premium se activa/factura manualmente hoy (ver Premium.jsx del app) — sin
+    // Mercado Pago todavía, así que no hay confirm_payment para este app.
+    billing: null,
+    // Base44 RLS no puede hacer lookup de Guardian/ChildGuardian → Parish
+    // directamente, así que el app espeja plan/license_status en cada User de
+    // la parroquia. license.set (puente) aplica este mirror después del patch
+    // principal — ver spec hermana en asistencia-catecismo.
+    mirror: {
+      entity: 'User', matchField: 'parish_id',
+      fields: { plan: 'parish_plan', license_status: 'parish_license_status' },
+    },
+    // Ciclo de vida automático (cron license-lifecycle), solo mientras
+    // plan=premium: active → read_only → access_denied → deletion_eligible.
+    // El núcleo gratis de CateqHub nunca entra a este ciclo.
+    lifecycle: {
+      paidPlanValues: ['premium'],
+      graceDaysToReadOnly: 15,
+      graceDaysToAccessDenied: 15,
+      graceDaysToDeletionEligible: 30,
+      sinceFields: { read_only: 'read_only_since', access_denied: 'access_denied_since', deletion_eligible: 'deletion_eligible_since' },
+      exportConfirmedField: 'export_confirmed_at',
+      periodEndField: 'premium_period_end_at',
+    },
+  },
 }
 
 export function licenseControlFor(appId) {
@@ -137,6 +165,15 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
   } else if (op === 'set_plan') {
     if (!plan || !cfg.plans.includes(plan)) return { error: `plan inválido para ${appId}: ${plan}` }
     patch[cfg.planField] = plan
+    // Activar un plan de pago sin billing automatizado (hoy solo cateqhub) arranca
+    // el reloj del ciclo de vida manualmente: sella cuándo vence este período
+    // Premium para que el cron license-lifecycle sepa cuándo empezar a contar.
+    if (cfg.lifecycle?.paidPlanValues?.includes(plan)) {
+      const when = now ? new Date(now) : new Date()
+      const periodEnd = new Date(when.getTime())
+      periodEnd.setUTCDate(periodEnd.getUTCDate() + 30)
+      patch[cfg.lifecycle.periodEndField] = periodEnd.toISOString()
+    }
   } else if (op === 'confirm_payment') {
     const b = cfg.billing
     if (!b) return { error: `${appId} no soporta confirmación de pago` }

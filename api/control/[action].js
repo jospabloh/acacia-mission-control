@@ -16,6 +16,7 @@ import emailStatus from '../_lib/control/email-status.js'
 import members from '../_lib/control/members.js'
 import sessions from '../_lib/control/sessions.js'
 import sessionRevoke from '../_lib/control/session-revoke.js'
+import licenseDeletePremiumData from '../_lib/control/license-delete-premium-data.js'
 
 const ROUTES = {
   'run-sync': runSync,
@@ -28,6 +29,7 @@ const ROUTES = {
   'members': members,
   'sessions': sessions,
   'session-revoke': sessionRevoke,
+  'license-delete-premium-data': licenseDeletePremiumData,
 }
 
 export default async function handler(req, res) {
