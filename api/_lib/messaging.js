@@ -143,20 +143,19 @@ ${ctx.body ? paras(ctx.body) : ''}
 
   if (type === 'premium_read_only') {
     return {
-      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}Tutores en ${app.name} está en modo solo lectura`,
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}${app.name} está en modo solo lectura`,
       html: wrap(app.name, `<p>${hello}</p>
-<p>Tu plan Premium de <span class="hi">${esc(app.name)}</span> está pendiente de pago. Por ahora, <strong>agregar o editar Tutores</strong> quedó pausado — lo que ya registraste sigue visible sin cambios.</p>
-<p>El resto de ${esc(app.name)} (niños, grupos, asistencia) sigue funcionando normalmente, sin ninguna restricción.</p>
-<p>Confirma tu pago cuando puedas para reactivar Tutores. Cualquier duda, respóndenos este correo.</p>
+<p>Tu período de prueba o pago de <span class="hi">${esc(app.name)}</span> venció y no se ha renovado. Por ahora, <strong>agregar o editar quedó pausado en toda la app</strong> (asistencia, niños, grupos, reportes y Tutores) — lo que ya registraste sigue visible sin cambios.</p>
+<p>Confirma tu pago cuando puedas para reactivar la app por completo. Cualquier duda, respóndenos este correo.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }
 
   if (type === 'premium_access_denied') {
     return {
-      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}acceso a Tutores denegado en ${app.name} — exporta tus datos`,
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}acceso denegado en ${app.name} — exporta tus datos de Tutores`,
       html: wrap(app.name, `<p>${hello}</p>
-<p>Por falta de pago prolongada, el acceso a <strong>Tutores</strong> en <span class="hi">${esc(app.name)}</span> quedó denegado. El resto de la app (niños, grupos, asistencia) sigue funcionando normalmente.</p>
+<p>Por falta de pago prolongada, el acceso a <span class="hi">${esc(app.name)}</span> quedó denegado por completo: asistencia, niños, grupos, reportes y Tutores. Tus datos de niños, grupos y asistencia <strong>no se eliminan</strong> — quedan pausados hasta reactivar el plan.</p>
 <p>Puedes <strong>exportar (descargar) tus datos de Tutores</strong> directamente desde la pantalla de Premium dentro de ${esc(app.name)}, antes de que se eliminen. Solo tú, como administrador de tu parroquia, puedes hacerlo.</p>
 <p>Si confirmas tu pago, tu acceso se reactiva de inmediato.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
@@ -165,10 +164,10 @@ ${ctx.body ? paras(ctx.body) : ''}
 
   if (type === 'premium_read_only_reminder') {
     return {
-      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}recordatorio: Tutores sigue en solo lectura en ${app.name}`,
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}recordatorio: ${app.name} sigue en solo lectura`,
       html: wrap(app.name, `<p>${hello}</p>
-<p>Solo un recordatorio: tu plan Premium de <span class="hi">${esc(app.name)}</span> sigue pendiente de pago, así que Tutores continúa en modo solo lectura.</p>
-<p>Confirma tu pago cuando puedas para reactivarlo sin perder nada de lo ya registrado.</p>
+<p>Solo un recordatorio: tu período de prueba o pago de <span class="hi">${esc(app.name)}</span> sigue vencido, así que la app continúa en modo solo lectura.</p>
+<p>Confirma tu pago cuando puedas para reactivarla sin perder nada de lo ya registrado.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }
@@ -177,7 +176,7 @@ ${ctx.body ? paras(ctx.body) : ''}
     return {
       subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}recordatorio: exporta tus datos de Tutores en ${app.name}`,
       html: wrap(app.name, `<p>${hello}</p>
-<p>El acceso a Tutores en <span class="hi">${esc(app.name)}</span> sigue denegado por falta de pago. Te recordamos que puedes <strong>descargar tus datos</strong> desde la pantalla de Premium antes de que se eliminen.</p>
+<p>El acceso a ${esc(app.name)} sigue denegado por falta de pago. Te recordamos que puedes <strong>descargar tus datos de Tutores</strong> desde la pantalla de Premium antes de que se eliminen — el resto de tu información no se borra.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }
@@ -186,8 +185,19 @@ ${ctx.body ? paras(ctx.body) : ''}
     return {
       subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tus datos de Tutores en ${app.name} fueron eliminados`,
       html: wrap(app.name, `<p>${hello}</p>
-<p>Confirmamos que los datos de <strong>Tutores</strong> de tu parroquia en <span class="hi">${esc(app.name)}</span> fueron eliminados de la plataforma, tras haber confirmado tu exportación. El resto de tu información (niños, grupos, asistencia) no fue afectado.</p>
-<p>Puedes volver a usar Tutores en cualquier momento activando el plan Premium de nuevo.</p>
+<p>Confirmamos que los datos de <strong>Tutores</strong> de tu parroquia en <span class="hi">${esc(app.name)}</span> fueron eliminados de la plataforma, tras haber confirmado tu exportación. El resto de tu información (niños, grupos, asistencia) no fue afectado, y tu parroquia queda en el plan Gratis: asistencia, niños, grupos/libros y reportes siguen funcionando sin vencimiento.</p>
+<p>Puedes volver a usar Tutores, mensajería, tareas y pulseras en cualquier momento activando el plan Premium de nuevo.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'trial_ended_downgraded_free') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tu prueba Premium de ${app.name} terminó — sigues en el plan Gratis`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Tu prueba Premium de <span class="hi">${esc(app.name)}</span> de 30 días terminó. Como tu parroquia tiene 50 niños activos o menos, no se pausó nada: sigues en el <strong>plan Gratis</strong>, sin vencimiento — asistencia por QR, niños, grupos/libros y reportes siguen funcionando igual.</p>
+<p>Lo único que ya no está disponible es <strong>Tutores, mensajería, tareas y pulseras</strong> (funciones Premium). Si ya cargaste tutores, siguen visibles y los puedes eliminar cuando quieras; para volver a agregarlos hay que activar Premium.</p>
+<p>¿Quieres seguir con Premium? Responde este correo o escríbele a tu ejecutivo ACACIA.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }

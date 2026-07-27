@@ -53,6 +53,25 @@ export function computeLifecycleTransition(license, lifecycleCfg, now = new Date
   return null // deletion_eligible es terminal — solo sale por acción humana
 }
 
+// Decide si, en vez de aplicar la transición active → read_only, hay que
+// bajar la parroquia directo a un plan gratuito permanente (cfg.freeDowngrade
+// — hoy solo cateqhub). Solo aplica a la PRIMERA transición del ciclo: una
+// vez que una licencia ya está en read_only/access_denied/deletion_eligible
+// (porque tiene más consumo del que el plan gratuito permite), no se
+// reconsidera en cada corrida — si el tenant reduce su consumo mientras está
+// ahí, la baja a gratis la hace un humano (o confirm_payment), no el cron;
+// si no, oscilaría entre estados en corridas sucesivas según el conteo del
+// día. `usageCount` ya viene resuelto por el llamador (IO real vive en el
+// cron, esto se queda puro/testeable) — null cuando la consulta falló o no
+// se pudo resolver, y en ese caso NUNCA se arriesga el downgrade (se sigue
+// el ciclo normal, más conservador que dejar pasar un tenant que sí debía
+// restringirse).
+export function shouldDowngradeToFree(freeDowngradeCfg, transition, usageCount) {
+  if (!freeDowngradeCfg || !transition || transition.toStatus !== 'read_only') return false
+  if (usageCount == null) return false
+  return usageCount <= freeDowngradeCfg.childCap
+}
+
 // Qué tipo de recordatorio semanal corresponde a un estado (o ninguno).
 export function reminderKindFor(status) {
   if (status === 'read_only') return 'premium_read_only_reminder'

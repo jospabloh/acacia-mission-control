@@ -75,6 +75,12 @@ const APPS = {
     plans: ['free', 'premium'],
     // Premium se activa/factura manualmente hoy (ver Premium.jsx del app) — sin
     // Mercado Pago todavía, así que no hay confirm_payment para este app.
+    // Precio de referencia (informativo, no aplicado por este archivo): plan
+    // Gratis $0 hasta 50 niños activos; Premium 30 días de prueba y luego por
+    // tramo de niños activos: 51-150 $500/mes, 151-250 $650, 251-350 $800,
+    // 351-450 $950, 451+ cotizar. Pago anual con 2 meses gratis. Mismos
+    // tramos que Premium.jsx (asistencia-catecismo) y apps/cateqhub.html
+    // (acaciaco-site) — si cambian, cambia en los tres.
     billing: null,
     // Base44 RLS no puede hacer lookup de Guardian/ChildGuardian → Parish
     // directamente, así que el app espeja plan/license_status en cada User de
@@ -84,9 +90,27 @@ const APPS = {
       entity: 'User', matchField: 'parish_id',
       fields: { plan: 'parish_plan', license_status: 'parish_license_status' },
     },
-    // Ciclo de vida automático (cron license-lifecycle), solo mientras
-    // plan=premium: active → read_only → access_denied → deletion_eligible.
-    // El núcleo gratis de CateqHub nunca entra a este ciclo.
+    // plan="free" es un plan permanente y normal en CateqHub (núcleo completo
+    // hasta freeDowngrade.childCap niños activos, sin Tutores/mensajería/
+    // tareas/pulseras) — no una penalización. Toda parroquia nueva arranca en
+    // plan=premium con 30 días de prueba (premium_period_end_at). Si ese
+    // período vence sin renovarse:
+    //   - freeDowngrade.childCap niños activos o menos → license-lifecycle.js
+    //     (el cron, no esta lógica pura) baja la parroquia directo a
+    //     plan="free" antes de aplicar la transición a read_only — ver
+    //     applyFreeDowngradeIfEligible en ese archivo.
+    //   - más de freeDowngrade.childCap → sigue el ciclo de abajo
+    //     (lifecycle), que restringe TODA la app (no solo Tutores) hasta
+    //     pagar el nivel Premium que corresponda.
+    // El borrado automático (ver license-delete-premium-data) sigue limitado
+    // a Guardian/ChildGuardian (Tutores) — nunca a niños/grupos/asistencia —
+    // y resetea la parroquia a plan="free" (el mismo plan permanente de
+    // arriba, no un estado especial).
+    freeDowngrade: {
+      childCap: 50,
+      freePlanValue: 'free',
+      usage: { entity: 'Child', tenantField: 'parish_id', filterField: 'active', filterValue: true },
+    },
     lifecycle: {
       paidPlanValues: ['premium'],
       graceDaysToReadOnly: 15,

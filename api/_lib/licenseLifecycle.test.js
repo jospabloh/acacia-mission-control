@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { computeLifecycleTransition, reminderKindFor, weekBucketKey } from './licenseLifecycle.js'
+import { computeLifecycleTransition, reminderKindFor, weekBucketKey, shouldDowngradeToFree } from './licenseLifecycle.js'
 
 const CFG = {
   paidPlanValues: ['premium'],
@@ -70,6 +70,34 @@ test('reminderKindFor: read_only y access_denied mandan tipos distintos, el rest
   assert.equal(reminderKindFor('access_denied'), 'premium_access_denied_reminder')
   assert.equal(reminderKindFor('active'), null)
   assert.equal(reminderKindFor('deletion_eligible'), null) // ya está en revisión humana, sin más recordatorios automáticos
+})
+
+const FREE_DOWNGRADE = { childCap: 50, freePlanValue: 'free', usage: { entity: 'Child', tenantField: 'parish_id', filterField: 'active', filterValue: true } }
+
+test('shouldDowngradeToFree: baja a gratis si el consumo está en el tope o por debajo', () => {
+  const transition = { toStatus: 'read_only', sinceField: 'read_only_since' }
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, transition, 50), true)
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, transition, 0), true)
+})
+
+test('shouldDowngradeToFree: no baja a gratis si el consumo supera el tope', () => {
+  const transition = { toStatus: 'read_only', sinceField: 'read_only_since' }
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, transition, 51), false)
+})
+
+test('shouldDowngradeToFree: nunca arriesga el downgrade si el conteo no se pudo resolver', () => {
+  const transition = { toStatus: 'read_only', sinceField: 'read_only_since' }
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, transition, null), false)
+})
+
+test('shouldDowngradeToFree: solo aplica a la transición active → read_only, no a las siguientes', () => {
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, { toStatus: 'access_denied', sinceField: 'access_denied_since' }, 10), false)
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, { toStatus: 'deletion_eligible', sinceField: 'deletion_eligible_since' }, 10), false)
+})
+
+test('shouldDowngradeToFree: sin config freeDowngrade o sin transición, nunca baja', () => {
+  assert.equal(shouldDowngradeToFree(undefined, { toStatus: 'read_only' }, 10), false)
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, null, 10), false)
 })
 
 test('weekBucketKey: mismo lunes UTC para toda la semana', () => {
