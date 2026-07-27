@@ -57,8 +57,18 @@ test('premium_read_only_reminder y premium_access_denied_reminder son correos di
   assert.notEqual(a.subject, b.subject)
 })
 
-test('premium_data_deleted_confirmation confirma el borrado de Tutores, no de niños', () => {
+test('premium_data_deleted_confirmation confirma el borrado de Tutores, no de niños, y que sigue en plan Gratis', () => {
   const app = messagingFor('cateqhub')
   const out = renderMessage('premium_data_deleted_confirmation', { app, tenantName: 'T' })
   assert.match(out.html, /Tutores/)
+  assert.match(out.html, /plan Gratis/)
+  assert.doesNotMatch(out.html, /solo lectura/i)
+})
+
+test('trial_ended_downgraded_free: avisa que sigue en Gratis, no que se restringió nada', () => {
+  const app = messagingFor('cateqhub')
+  const out = renderMessage('trial_ended_downgraded_free', { app, tenantName: 'Parroquia San Juan' })
+  assert.match(out.subject, /San Juan/)
+  assert.match(out.html, /plan Gratis/)
+  assert.doesNotMatch(out.html, /denegad|solo lectura|pausad/i)
 })

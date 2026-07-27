@@ -185,8 +185,19 @@ ${ctx.body ? paras(ctx.body) : ''}
     return {
       subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tus datos de Tutores en ${app.name} fueron eliminados`,
       html: wrap(app.name, `<p>${hello}</p>
-<p>Confirmamos que los datos de <strong>Tutores</strong> de tu parroquia en <span class="hi">${esc(app.name)}</span> fueron eliminados de la plataforma, tras haber confirmado tu exportación. El resto de tu información (niños, grupos, asistencia) no fue afectado, pero sigue en modo de solo lectura.</p>
-<p>Puedes volver a usar Tutores y editar el resto de la app en cualquier momento activando el plan Premium de nuevo.</p>
+<p>Confirmamos que los datos de <strong>Tutores</strong> de tu parroquia en <span class="hi">${esc(app.name)}</span> fueron eliminados de la plataforma, tras haber confirmado tu exportación. El resto de tu información (niños, grupos, asistencia) no fue afectado, y tu parroquia queda en el plan Gratis: asistencia, niños, grupos/libros y reportes siguen funcionando sin vencimiento.</p>
+<p>Puedes volver a usar Tutores, mensajería, tareas y pulseras en cualquier momento activando el plan Premium de nuevo.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'trial_ended_downgraded_free') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tu prueba Premium de ${app.name} terminó — sigues en el plan Gratis`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Tu prueba Premium de <span class="hi">${esc(app.name)}</span> de 30 días terminó. Como tu parroquia tiene 50 niños activos o menos, no se pausó nada: sigues en el <strong>plan Gratis</strong>, sin vencimiento — asistencia por QR, niños, grupos/libros y reportes siguen funcionando igual.</p>
+<p>Lo único que ya no está disponible es <strong>Tutores, mensajería, tareas y pulseras</strong> (funciones Premium). Si ya cargaste tutores, siguen visibles y los puedes eliminar cuando quieras; para volver a agregarlos hay que activar Premium.</p>
+<p>¿Quieres seguir con Premium? Responde este correo o escríbele a tu ejecutivo ACACIA.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }
