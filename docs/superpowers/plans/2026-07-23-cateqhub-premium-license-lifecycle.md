@@ -738,11 +738,14 @@ git commit -m "Agregar cron diario license-lifecycle (ciclo de vida Premium de C
 
 ---
 
-### Task 6: `api/control/license-delete-premium-data.js` — owner-gated deletion endpoint
+### Task 6: `api/_lib/control/license-delete-premium-data.js` — owner-gated deletion endpoint
+
+**Correction (found during implementation):** this plan originally specified `api/control/license-delete-premium-data.js` as a new top-level file. That's wrong for this repo — `api/control/[action].js` is a single dynamic route that dispatches every `/api/control/<action>` request to a handler under `api/_lib/control/` specifically so Vercel's Hobby-plan 12-function cap isn't spent one-per-endpoint (see the comment at the top of `[action].js`). The handler lives at `api/_lib/control/license-delete-premium-data.js`, registered in `[action].js`'s `ROUTES` map under the key `'license-delete-premium-data'`. The client-facing URL (`/api/control/license-delete-premium-data`) and request/response shapes below are unaffected — only the file's location and the fact that it needs a `ROUTES` entry changed.
 
 **Files:**
-- Create: `api/control/license-delete-premium-data.js`
-- Create: `api/control/license-delete-premium-data.test.js`
+- Create: `api/_lib/control/license-delete-premium-data.js`
+- Create: `api/_lib/control/license-delete-premium-data.test.js`
+- Modify: `api/control/[action].js` (import + `ROUTES` entry)
 - Modify: `src/lib/control.js`
 
 **Interfaces:**
