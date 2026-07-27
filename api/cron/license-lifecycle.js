@@ -40,7 +40,13 @@ async function runLicenseLifecycle(now) {
   for (const app of (apps ?? [])) {
     const cfg = licenseControlFor(app.id)
     if (!cfg?.lifecycle) continue
-    const row = { app: app.id, transitioned: 0, reminded: 0, failed: 0 }
+    // transitionFailed y emailFailed van por separado (no un solo `failed`
+    // compartido) para que el resumen de auditoría (abajo, audit()) distinga
+    // "se cayeron N correos" de "N tenants se quedaron sin aplicar su
+    // restricción de acceso" — lo segundo es una falla silenciosa de control
+    // de acceso que se repite cada día hasta que alguien la note; con un solo
+    // contador compartido, un operador no puede saber cuál de las dos pasó.
+    const row = { app: app.id, transitioned: 0, reminded: 0, transitionFailed: 0, emailFailed: 0 }
 
     const { data: lics, error: lErr } = await supabaseAdmin
       .from('licenses').select('external_id, plan, status, raw').eq('app_id', app.id)
@@ -94,7 +100,7 @@ async function runLicenseLifecycle(now) {
           didTransition = true
           licState.status = transition.toStatus // para que el recordatorio de abajo, en la misma corrida, use el estado ya actualizado
         } catch (e) {
-          row.failed++
+          row.transitionFailed++
           console.error(`license-lifecycle: transición falló app=${app.id} tenant=${lic.external_id}: ${e.message}`)
           continue
         }
@@ -112,7 +118,7 @@ async function runLicenseLifecycle(now) {
 
       const r = await sendFollowup(app, msgCfg, kind, recipient, {})
       if (r.sent) row.reminded++
-      else row.failed++
+      else row.emailFailed++
     }
 
     if (didTransition) { try { await syncLicensesForApp(app) } catch { /* best-effort */ } }
