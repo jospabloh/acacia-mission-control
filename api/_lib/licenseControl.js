@@ -86,7 +86,14 @@ const APPS = {
     },
     // Ciclo de vida automático (cron license-lifecycle), solo mientras
     // plan=premium: active → read_only → access_denied → deletion_eligible.
-    // El núcleo gratis de CateqHub nunca entra a este ciclo.
+    // Ya no hay un núcleo gratis permanente en CateqHub — toda parroquia
+    // nueva arranca en plan=premium con 30 días de prueba
+    // (premium_period_end_at), así que este ciclo aplica a TODA la app
+    // (asistencia, niños, grupos, reportes y Tutores) si no se renueva. El
+    // borrado automático (ver license-delete-premium-data) sigue limitado a
+    // Guardian/ChildGuardian (Tutores) — nunca a niños/grupos/asistencia —
+    // y resetea la parroquia a plan="free": ahí el núcleo vuelve a solo
+    // lectura hasta reactivar Premium.
     lifecycle: {
       paidPlanValues: ['premium'],
       graceDaysToReadOnly: 15,

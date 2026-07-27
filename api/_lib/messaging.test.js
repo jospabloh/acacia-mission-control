@@ -36,12 +36,12 @@ test('cateqhub: messagingFor resuelve destinatario vía User (parish_id/parish_r
   assert.equal(cfg.recipient.related.roleField, 'parish_role')
 })
 
-test('premium_read_only: menciona Tutores pausado, no menciona el núcleo gratis', () => {
+test('premium_read_only: menciona toda la app pausada, nunca datos eliminados', () => {
   const app = messagingFor('cateqhub')
   const out = renderMessage('premium_read_only', { app, tenantName: 'Parroquia San Juan' })
   assert.match(out.subject, /San Juan/)
-  assert.match(out.html, /Tutores/)
-  assert.doesNotMatch(out.html, /niñas.*eliminad|asistencia.*eliminad/i)
+  assert.match(out.html, /toda la app/)
+  assert.doesNotMatch(out.html, /niñas.*eliminad|asistencia.*eliminad|Tutores.*eliminad/i)
 })
 
 test('premium_access_denied: incluye instrucciones de exportar dentro de CateqHub', () => {
