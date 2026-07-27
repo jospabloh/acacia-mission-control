@@ -1079,6 +1079,13 @@ const STATUS_VALUES = {
 }
 ```
 
+**Correction (post-implementation review):** the `statusValue()` fallback in Step 1 (`STATUS_VALUES[appId]?.[op] ?? op`) is itself a bug for the other 5 apps — `op` is `'suspend'`, but their stored status string is `'suspended'` (a different string), so `statusValue(appId, 'suspend')` returned the literal `'suspend'` for every app not in `STATUS_VALUES`, making `r.status !== statusValue(r.app_id, 'suspend')` always true and breaking "Pausar" button visibility (always shown, even when already suspended) for flowfin/stockflow/rumbo/liuma/puntos. `active`/`view_only` happened to match by coincidence, masking it. Fix: add a `DEFAULT_STATUS_VALUES = { active: 'active', suspend: 'suspended', view_only: 'view_only' }` map and fall through to it before falling through to `op`:
+```js
+function statusValue(appId, op) {
+  return STATUS_VALUES[appId]?.[op] ?? DEFAULT_STATUS_VALUES[op] ?? op
+}
+```
+
 - [ ] **Step 5: Add the export-confirmed badge and delete button**
 
 Add state for the delete-confirmation modal, alongside the existing `useState` calls:
