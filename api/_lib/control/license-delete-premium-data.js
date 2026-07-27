@@ -74,7 +74,12 @@ export default async function handler(req, res) {
         { entity: 'Guardian', field: 'parish_id', value: licenseExternalId },
       ],
     })
-    const deletedCounts = delOut?.deletedCounts ?? {}
+    // El SDK de Base44 crea el cliente de functions con interceptResponses:false,
+    // así que callBridge devuelve el objeto de respuesta axios crudo, no el body
+    // ya desempaquetado — hay que leer .data (mismo patrón que syncHealth.js,
+    // syncLicenses.js, emailFollowup.js en este repo).
+    const delBody = delOut?.data ?? delOut
+    const deletedCounts = delBody?.deletedCounts ?? {}
 
     // El puente NO devuelve un simple { ok:true }: repite el borrado por entidad
     // hasta que no queden filas y reporta { ok, deletedCounts, incomplete[] },
@@ -87,13 +92,13 @@ export default async function handler(req, res) {
     // NO se registra como borrado exitoso en la bitácora. El operador ve qué
     // entidades faltan y reintenta (la acción del puente es idempotente: borra
     // por filtro, así que un reintento sólo alcanza lo que quedó vivo).
-    const incomplete = Array.isArray(delOut?.incomplete) ? delOut.incomplete : []
-    if (incomplete.length > 0 || delOut?.ok !== true) {
+    const incomplete = Array.isArray(delBody?.incomplete) ? delBody.incomplete : []
+    if (incomplete.length > 0 || delBody?.ok !== true) {
       // Se audita el intento fallido con una acción DISTINTA — así ninguna
       // consulta de la bitácora puede confundirlo con un borrado completado.
       await audit('control:license-delete-premium-data-incomplete', {
         actor: member.user_id, actor_email: member.email, target_app: appId, target_id: licenseExternalId,
-        payload: { deletedCounts, incomplete, bridgeOk: delOut?.ok ?? null },
+        payload: { deletedCounts, incomplete, bridgeOk: delBody?.ok ?? null },
       })
       const detail = incomplete.length > 0
         ? `borrado incompleto: ${incomplete.join(', ')}`
@@ -108,8 +113,21 @@ export default async function handler(req, res) {
     // El plan "gratis" se deriva de cfg (cualquier plan de cfg.plans que NO esté
     // en lifecycle.paidPlanValues) en vez de escribir 'free' fijo — para que
     // esto siga siendo correcto si algún día otra app se suma a `lifecycle` con
-    // un nombre de plan gratuito distinto.
-    const freePlan = cfg.plans.find((p) => !cfg.lifecycle.paidPlanValues.includes(p)) ?? cfg.plans[0]
+    // un nombre de plan gratuito distinto. Si cfg no define ninguno, fallar
+    // fuerte: los datos de menores YA se borraron, así que reiniciar la
+    // licencia a un plan de pago por defecto silencioso sería peor que dejarla
+    // varada en deletion_eligible para que un humano revise cfg.
+    const freePlan = cfg.plans.find((p) => !cfg.lifecycle.paidPlanValues.includes(p))
+    if (!freePlan) {
+      await audit('control:license-delete-premium-data-reset-failed', {
+        actor: member.user_id, actor_email: member.email, target_app: appId, target_id: licenseExternalId,
+        payload: { deletedCounts, error: `config de ${appId} no define un plan gratuito en cfg.plans` },
+      })
+      return res.status(500).json({
+        error: `datos borrados, pero config de ${appId} no define un plan gratuito; la licencia NO se reinició. Revisa licenseControl.js.`,
+        deletedCounts,
+      })
+    }
     const activeStatus = cfg.statuses.active
     const resetPatch = {
       [cfg.planField]: freePlan, [cfg.statusField]: activeStatus,
