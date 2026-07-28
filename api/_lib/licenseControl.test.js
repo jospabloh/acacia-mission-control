@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor } from './licenseControl.js'
+import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor, deriveMirror } from './licenseControl.js'
 
 // Fixed clock so every assertion is deterministic.
 const NOW = new Date('2026-06-15T12:00:00Z')
@@ -142,6 +142,34 @@ test('cateqhub declara mirror hacia User (Base44 RLS no puede hacer lookup a Par
   const cfg = licenseControlFor('cateqhub')
   assert.deepEqual(cfg.mirror, {
     entity: 'User', matchField: 'parish_id',
-    fields: { plan: 'parish_plan', license_status: 'parish_license_status' },
+    fields: { plan: 'parish_plan', license_status: 'parish_license_status', support_priority_addon: 'parish_support_priority_addon' },
   })
+})
+
+test('cateqhub set_addon: implementation solo acepta none/completed y estampa implementation_completed_at', () => {
+  const { patch, error } = buildLicenseChange('cateqhub', 'set_addon', { addonKey: 'implementation', addonValue: 'completed', now: '2026-07-28T12:00:00Z' })
+  assert.equal(error, undefined)
+  assert.equal(patch.implementation_status, 'completed')
+  assert.equal(patch.implementation_completed_at, '2026-07-28T12:00:00.000Z')
+
+  const invalid = buildLicenseChange('cateqhub', 'set_addon', { addonKey: 'implementation', addonValue: 'requested' })
+  assert.ok(invalid.error)
+})
+
+test('cateqhub set_addon: support_priority es un booleano puro, sin stamp', () => {
+  const on = buildLicenseChange('cateqhub', 'set_addon', { addonKey: 'support_priority', addonValue: true })
+  assert.equal(on.patch.support_priority_addon, true)
+  assert.equal(Object.keys(on.patch).length, 1)
+
+  const off = buildLicenseChange('cateqhub', 'set_addon', { addonKey: 'support_priority', addonValue: false })
+  assert.equal(off.patch.support_priority_addon, false)
+})
+
+test('deriveMirror: solo incluye campos presentes en el patch, con su valor nuevo', () => {
+  const cfg = licenseControlFor('cateqhub')
+  assert.deepEqual(deriveMirror(cfg, { support_priority_addon: true }), [
+    { entity: 'User', matchField: 'parish_id', fields: { parish_support_priority_addon: true } },
+  ])
+  assert.deepEqual(deriveMirror(cfg, { name: 'Parroquia X' }), undefined)
+  assert.deepEqual(deriveMirror({ mirror: undefined }, { plan: 'premium' }), undefined)
 })
