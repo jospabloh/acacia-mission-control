@@ -75,20 +75,48 @@ const APPS = {
     plans: ['free', 'premium'],
     // Premium se activa/factura manualmente hoy (ver Premium.jsx del app) — sin
     // Mercado Pago todavía, así que no hay confirm_payment para este app.
-    // Precio de referencia (informativo, no aplicado por este archivo): plan
-    // Gratis $0 hasta 50 niños activos; Premium 30 días de prueba y luego por
-    // tramo de niños activos: 51-150 $500/mes, 151-250 $650, 251-350 $800,
-    // 351-450 $950, 451+ cotizar. Pago anual con 2 meses gratis. Mismos
-    // tramos que Premium.jsx (asistencia-catecismo) y apps/cateqhub.html
-    // (acaciaco-site) — si cambian, cambia en los tres.
+    // Precio de referencia (informativo, no aplicado por este archivo) — plan
+    // de cobro en 3 partes (2026-07-28):
+    //   1) Implementación asistida (opcional, cargo único): hasta 150 niños
+    //      $1,490 MXN, 151-350 $2,490, 351+/diócesis $3,990. Autoservicio
+    //      sigue siendo $0.
+    //   2) Mensualidad Premium por tramo de niños activos (sin cambio):
+    //      Gratis $0 hasta 50 niños; Premium 30 días de prueba y luego
+    //      51-150 $500/mes, 151-250 $650, 251-350 $800, 351-450 $950, 451+
+    //      cotizar. Pago anual con 2 meses gratis. Cada tramo Premium
+    //      incluye soporte con prioridad hasta "high" (ver addons abajo).
+    //   3) Soporte adicional a la carta: $550 MXN/hora, $990 MXN/sesión de
+    //      capacitación extra, +$250 MXN/mes por el add-on de soporte
+    //      prioritario (sube el tope de prioridad de ticket a "urgent").
+    // Mismos números que Premium.jsx (asistencia-catecismo) y
+    // apps/cateqhub.html (acaciaco-site) — si cambian, cambia en los tres.
     billing: null,
     // Base44 RLS no puede hacer lookup de Guardian/ChildGuardian → Parish
-    // directamente, así que el app espeja plan/license_status en cada User de
+    // directamente, así que el app espeja plan/license_status (y, desde el
+    // plan de cobro de 2026-07-28, support_priority_addon) en cada User de
     // la parroquia. license.set (puente) aplica este mirror después del patch
-    // principal — ver spec hermana en asistencia-catecismo.
+    // principal — ver spec hermana en asistencia-catecismo. deriveMirror()
+    // abajo construye el `mirror` real a partir de lo que cambió en `patch`.
     mirror: {
       entity: 'User', matchField: 'parish_id',
-      fields: { plan: 'parish_plan', license_status: 'parish_license_status' },
+      fields: { plan: 'parish_plan', license_status: 'parish_license_status', support_priority_addon: 'parish_support_priority_addon' },
+    },
+    // Add-ons del plan de cobro (2026-07-28, ver Premium.jsx del app): una
+    // parroquia solo puede "solicitarlos" (implementation_requested_at /
+    // support_priority_addon_requested_at, autoservicio dentro del app);
+    // activarlos de verdad pasa solo por acá (rol de servicio), vía el op
+    // 'set_addon' — ver buildLicenseChange.
+    addons: {
+      implementation: {
+        // 'requested' NO se escribe desde aquí (lo hace la parroquia misma,
+        // vía implementation_requested_at) — este add-on solo sirve para
+        // confirmarla ('completed') o revertir un error de captura ('none').
+        field: 'implementation_status', values: ['none', 'completed'],
+        stampField: { completed: 'implementation_completed_at' },
+      },
+      support_priority: {
+        field: 'support_priority_addon', values: [true, false],
+      },
     },
     // plan="free" es un plan permanente y normal en CateqHub (núcleo completo
     // hasta freeDowngrade.childCap niños activos, sin Tutores/mensajería/
@@ -127,6 +155,25 @@ export function licenseControlFor(appId) {
   return APPS[appId] ?? null
 }
 
+// Build the `mirror` array license.set expects (see acaciaControl entry.ts)
+// from cfg.mirror + a resolved patch: only source fields actually present in
+// `patch` that have a mirror mapping are included, with their NEW value.
+// Returns undefined when the app has no mirror config or nothing in `patch`
+// needs mirroring (harmless to omit — license.set treats a missing `mirror`
+// as a no-op). license-lifecycle.js (the cron) derives this inline instead of
+// calling this helper, to avoid touching working cron logic; keep both in
+// sync if the derivation ever changes.
+export function deriveMirror(cfg, patch) {
+  if (!cfg?.mirror) return undefined
+  const fields = Object.fromEntries(
+    Object.entries(cfg.mirror.fields)
+      .filter(([sourceField]) => sourceField in patch)
+      .map(([sourceField, mirrorField]) => [mirrorField, patch[sourceField]]),
+  )
+  if (Object.keys(fields).length === 0) return undefined
+  return [{ entity: cfg.mirror.entity, matchField: cfg.mirror.matchField, fields }]
+}
+
 // Human label for each op (for confirmation + audit notes).
 export const OP_LABEL = {
   reactivate: 'Reactivar (activar)',
@@ -134,6 +181,7 @@ export const OP_LABEL = {
   view_only: 'Solo lectura',
   set_plan: 'Cambiar plan',
   confirm_payment: 'Confirmar pago (renovar)',
+  set_addon: 'Cambiar add-on',
 }
 
 // Billing config for the renewal/payment flow (null when the app has none).
@@ -172,7 +220,7 @@ export function computeRenewalExpiry({ currentExpiry, periodMonths = 1, dateForm
 // Build the { patch, log } the bridge `license.set` expects for one operation.
 // Returns { error } when the op/plan is invalid for the app.
 // ctx (confirm_payment only): { currentExpiry, periodMonths, paymentReference, now }.
-export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry, periodMonths, paymentReference, now, dayConventionOverride } = {}) {
+export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry, periodMonths, paymentReference, now, dayConventionOverride, addonKey, addonValue } = {}) {
   const cfg = APPS[appId]
   if (!cfg) return { error: `app ${appId} no soporta control de licencia` }
 
@@ -227,6 +275,17 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
       patch.last_payment_at = when.toISOString().slice(0, 10)
       patch.renews_at = newExpiry
     }
+  } else if (op === 'set_addon') {
+    // Confirma/activa un add-on del plan de cobro (implementación asistida,
+    // soporte prioritario) tras validar el pago manualmente — ver cfg.addons.
+    const addonCfg = cfg.addons?.[addonKey]
+    if (!addonCfg) return { error: `addon inválido para ${appId}: ${addonKey}` }
+    if (!addonCfg.values.some((v) => v === addonValue)) {
+      return { error: `valor inválido para addon ${addonKey} en ${appId}: ${JSON.stringify(addonValue)}` }
+    }
+    patch[addonCfg.field] = addonValue
+    const stampField = addonCfg.stampField?.[addonValue]
+    if (stampField) patch[stampField] = (now ? new Date(now) : new Date()).toISOString()
   } else {
     return { error: `op desconocida: ${op}` }
   }

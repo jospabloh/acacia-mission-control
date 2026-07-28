@@ -5,7 +5,7 @@
 import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from '../appBridge.js'
 import { requireMember } from '../requireMember.js'
-import { licenseControlFor, buildLicenseChange, OP_LABEL } from '../licenseControl.js'
+import { licenseControlFor, buildLicenseChange, deriveMirror, OP_LABEL } from '../licenseControl.js'
 import { syncLicensesForApp } from '../sync/syncLicenses.js'
 import { messagingFor } from '../messaging.js'
 import { resolveRecipients, sendFollowup } from '../emailFollowup.js'
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const member = await requireMember(req, res, 'admin')
   if (!member) return
 
-  const { appId, licenseExternalId, op, plan, periodMonths, paymentReference, sendEmail } = req.body ?? {}
+  const { appId, licenseExternalId, op, plan, periodMonths, paymentReference, sendEmail, addonKey, addonValue } = req.body ?? {}
   if (!appId || !licenseExternalId || !op) return res.status(400).json({ error: 'falta appId/licenseExternalId/op' })
   if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
 
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     currentExpiry = lic?.current_period_end ?? null
   }
 
-  const change = buildLicenseChange(appId, op, { plan, actorEmail: member.email, currentExpiry, periodMonths, paymentReference })
+  const change = buildLicenseChange(appId, op, { plan, actorEmail: member.email, currentExpiry, periodMonths, paymentReference, addonKey, addonValue })
   if (change.error) return res.status(400).json({ error: change.error })
   if (change.log) change.log.row[cfg.audit.idField] = licenseExternalId // fill the audit record id
 
@@ -43,8 +43,16 @@ export default async function handler(req, res) {
   if (!app) return res.status(404).json({ error: 'app no encontrada' })
 
   try {
+    // mirror: keeps a per-tenant User-entity mirror (e.g. cateqhub's
+    // parish_plan/parish_license_status/parish_support_priority_addon) in
+    // sync with whatever this write actually touched — previously only the
+    // license-lifecycle cron did this derivation; a manual op through this
+    // endpoint (reactivate/suspend/set_plan/set_addon/…) left the mirror
+    // stale until the next cron tick. Harmless no-op for apps without
+    // cfg.mirror (deriveMirror returns undefined).
     const out = await callBridge(app, 'license.set', {
       entity: cfg.entity, id: licenseExternalId, patch: change.patch, log: change.log,
+      mirror: deriveMirror(cfg, change.patch),
     })
     // Reflect the change in the bodega right away (best-effort).
     let resync = null

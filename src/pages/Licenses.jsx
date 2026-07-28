@@ -108,7 +108,7 @@ const TONE_CLS = {
 export function Licenses() {
   const [rows, setRows] = useState(null) // null = loading
   const [renewals, setRenewals] = useState({}) // key `app|ext` → { renewed, verified, new_expiry }
-  const [confirm, setConfirm] = useState(null) // { row, op, plan, label, warn }
+  const [confirm, setConfirm] = useState(null) // { row, op, plan, label, warn } | { row, op:'set_addon', addonKey, addonValue, label, warn }
   const [pay, setPay] = useState(null) // { row } — payment-confirmation modal
   const [months, setMonths] = useState(1)
   const [payRef, setPayRef] = useState('')
@@ -137,11 +137,11 @@ export function Licenses() {
   async function run() {
     if (!confirm) return
     setBusy(true); setFlash(null)
-    const { row, op, plan } = confirm
+    const { row, op, plan, addonKey, addonValue } = confirm
     try {
-      await licenseAction(row.app_id, row.external_id, op, plan)
+      await licenseAction(row.app_id, row.external_id, op, plan, op === 'set_addon' ? { addonKey, addonValue } : {})
       await load()
-      setFlash({ ok: true, msg: `${OP_COPY[op]?.label ?? 'Cambio de plan'} aplicado a ${row.tenants?.name ?? row.external_id}.` })
+      setFlash({ ok: true, msg: `${confirm.label ?? OP_COPY[op]?.label ?? 'Cambio'} aplicado a ${row.tenants?.name ?? row.external_id}.` })
       setConfirm(null)
     } catch (e) {
       setFlash({ ok: false, msg: e.message })
@@ -214,6 +214,12 @@ export function Licenses() {
     label: op === 'set_plan' ? `Cambiar plan a "${plan}"` : OP_COPY[op].label,
     warn: op === 'set_plan' ? `Cambia el plan del tenant a "${plan}".` : OP_COPY[op].warn,
   })
+
+  // Add-ons del plan de cobro de CateqHub (implementación asistida, soporte
+  // prioritario) — confirma un pago validado manualmente (WhatsApp/factura,
+  // sin Mercado Pago para este app todavía). Reutiliza el mismo modal de
+  // confirmación que el resto de los ops.
+  const askAddon = (row, addonKey, addonValue, label, warn) => setConfirm({ row, op: 'set_addon', addonKey, addonValue, label, warn })
 
   return (
     <div>
@@ -309,6 +315,46 @@ export function Licenses() {
                           )}
                         </div>
                       )}
+                      {r.app_id === 'cateqhub' && (() => {
+                        // Add-ons del plan de cobro (implementación asistida + soporte
+                        // prioritario, ver CLAUDE.md del app hermano). Ambos campos llegan
+                        // ya en `raw` porque licenseMapping copia el registro Parish completo,
+                        // sin necesitar field_map — ver api/_lib/sync/licenseMapping.js.
+                        const impl = r.raw?.implementation_status || 'none'
+                        const implTierLabel = r.raw?.implementation_requested_tier || '—'
+                        const addonOn = !!r.raw?.support_priority_addon
+                        return (
+                          <div className="mt-1.5 flex w-full flex-wrap items-center gap-1.5 border-t border-hair pt-1.5">
+                            <span className="text-[11px] text-ink-faint">Implementación:</span>
+                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                              impl === 'completed' ? 'bg-emerald-50 text-emerald-700'
+                                : impl === 'requested' ? 'bg-amber-50 text-amber-700'
+                                  : 'bg-paper-subtle text-ink-mute'
+                            }`}>
+                              {impl === 'completed' ? 'Completada' : impl === 'requested' ? `Solicitada (${implTierLabel})` : 'Sin solicitar'}
+                            </span>
+                            {impl === 'requested' && (
+                              <button
+                                onClick={() => askAddon(r, 'implementation', 'completed', 'Marcar implementación como completada',
+                                  'Marca la implementación asistida como completada, después de haber confirmado el pago único con la parroquia.')}
+                                className="rounded-md border border-emerald-200 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50">
+                                Marcar completada
+                              </button>
+                            )}
+                            <span className="ml-2 text-[11px] text-ink-faint">Soporte prioritario:</span>
+                            <button
+                              onClick={() => askAddon(r, 'support_priority', !addonOn, addonOn ? 'Desactivar soporte prioritario' : 'Activar soporte prioritario',
+                                addonOn
+                                  ? 'Desactiva el add-on de soporte prioritario (vuelve al tope de prioridad normal del plan).'
+                                  : 'Activa el add-on de soporte prioritario, después de haber confirmado el pago mensual — sube el tope de prioridad de ticket seleccionable a "urgente".')}
+                              type="button" role="switch" aria-checked={addonOn}
+                              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${addonOn ? 'border-brand/40 bg-brand/10 text-brand' : 'border-hair text-ink-mute hover:bg-paper-subtle'}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${addonOn ? 'bg-brand' : 'bg-ink-faint'}`} />
+                              {addonOn ? 'Activo' : 'Inactivo'}
+                            </button>
+                          </div>
+                        )
+                      })()}
                     </td>
                   </tr>
                 )
