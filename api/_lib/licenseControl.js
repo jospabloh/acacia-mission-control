@@ -80,11 +80,15 @@ const APPS = {
     //   1) Implementación asistida (opcional, cargo único): hasta 150 niños
     //      $1,490 MXN, 151-350 $2,490, 351+/diócesis $3,990. Autoservicio
     //      sigue siendo $0.
-    //   2) Mensualidad Premium por tramo de niños activos (sin cambio):
-    //      Gratis $0 hasta 50 niños; Premium 30 días de prueba y luego
-    //      51-150 $500/mes, 151-250 $650, 251-350 $800, 351-450 $950, 451+
-    //      cotizar. Pago anual con 2 meses gratis. Cada tramo Premium
-    //      incluye soporte con prioridad hasta "high" (ver addons abajo).
+    //   2) Mensualidad Premium por tramo de niños activos: Gratis $0 hasta
+    //      50 niños; Premium 30 días de prueba y luego 51-150 $500/mes,
+    //      151-250 $650, 251-350 $800, 351-450 $950, 451-550 $1,100,
+    //      551-650 $1,250 (estos dos últimos acotados el 2026-07-28 —
+    //      antes "cotizar", primer cliente de ese tamaño pidió cotización;
+    //      mismo incremento de $150/100 niños que los tramos previos),
+    //      651+ o diócesis multi-parroquia sigue a cotizar. Pago anual con
+    //      2 meses gratis. Cada tramo Premium incluye soporte con
+    //      prioridad hasta "high" (ver addons abajo).
     //   3) Soporte adicional a la carta: $550 MXN/hora, $990 MXN/sesión de
     //      capacitación extra, +$250 MXN/mes por el add-on de soporte
     //      prioritario (sube el tope de prioridad de ticket a "urgent").
