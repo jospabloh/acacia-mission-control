@@ -73,13 +73,39 @@ export function renderMessage(type, ctx) {
   const hello = ctx.tenantName ? `Hola <span class="hi">${esc(ctx.tenantName)}</span>,` : 'Hola,'
 
   if (type === 'renewal') {
-    const when = ctx.date ? `el <strong>${fmtDate(ctx.date)}</strong>${ctx.days != null ? ` (en ${ctx.days} días)` : ''}` : 'pronto'
+    // days puede llegar negativo (licencia ya vencida — el sweep del día 1 la
+    // atrapa aunque haya vencido semanas antes). "vence... (en -31 días)" lee
+    // como un bug; separamos vencida (venció, hace N días) de por vencer
+    // (vence, en N días) para que el correo siempre sea claro.
+    const overdue = ctx.days != null && ctx.days < 0
+    const plural = (n) => `${n} día${n === 1 ? '' : 's'}`
+    const when = ctx.date
+      ? overdue
+        ? `venció el <strong>${fmtDate(ctx.date)}</strong> (hace ${plural(Math.abs(ctx.days))})`
+        : `vence el <strong>${fmtDate(ctx.date)}</strong>${ctx.days != null ? ` (en ${plural(ctx.days)})` : ''}`
+      : 'vence pronto'
     return {
       subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}renueva tu licencia de ${app.name} y sigue sin interrupciones 🌿`,
       html: wrap(app.name, `<p>${hello}</p>
 <p>Sabemos lo importante que es <span class="hi">${esc(app.name)}</span> en tu día a día — para mantener <strong>${esc(app.value)}</strong> sin complicaciones. Queremos que sigas aprovechándolo sin pausas.</p>
-<p>Tu licencia vence ${when}. Renovar toma un minuto: escríbele a tu ejecutivo ACACIA o responde este correo y lo dejamos listo.</p>
+<p>Tu licencia ${when}. Renovar toma un minuto: escríbele a tu ejecutivo ACACIA o responde este correo y lo dejamos listo.</p>
 <p>Aquí estamos para lo que necesites.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'renewal_upcoming') {
+    // Aviso previo (T-7 días), antes de que la licencia venza — para pago
+    // manual únicamente (quien tiene cobro automático ya tiene su propio
+    // aviso el día 1). Tono de heads-up, no de urgencia: todavía falta.
+    const days = Number(ctx.days) || 0
+    const plural = (n) => `${n} día${n === 1 ? '' : 's'}`
+    const when = ctx.date ? `el <strong>${fmtDate(ctx.date)}</strong>` : 'pronto'
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tu licencia de ${app.name} vence en ${plural(days)} 🗓️`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Un aviso con tiempo: tu licencia de <span class="hi">${esc(app.name)}</span> vence ${when} (en ${plural(days)}). Todavía no pasa nada — solo queremos que no te agarre de sorpresa.</p>
+<p>Cuando quieras renovar, escríbele a tu ejecutivo ACACIA o responde este correo y lo dejamos listo, para que <strong>${esc(app.value)}</strong> siga sin interrupciones.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }
@@ -124,6 +150,19 @@ ${ctx.date ? `<p>Tu siguiente período queda cubierto hasta el <strong>${fmtDate
 <p>La suscripción es mensual por <strong>Mercado Pago</strong>: se activa al instante y se renueva sola cada mes (la cancelas cuando quieras).</p>
 ${ctx.body ? paras(ctx.body) : ''}
 <p>¿Lista/o para activarlo? Responde este correo o escríbele a tu ejecutivo ACACIA y lo dejamos andando hoy mismo.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'usage_reminder') {
+    // Recordatorio de uso — motivacional, sin culpa. Nunca menciona licencia,
+    // vencimiento ni riesgo de nada: es una invitación, no una advertencia.
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}hace tiempo que no te vemos por ${app.name} 🌱`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Notamos que hace un tiempo no entras a <span class="hi">${esc(app.name)}</span> — nada cambió, todo sigue tal como lo dejaste. Solo queríamos avisarte que seguimos aquí, listos para ayudarte con <strong>${esc(app.value)}</strong>.</p>
+<p>Si algo no te quedó claro o hay algo que podamos mejorar, respóndenos este correo — nos encantaría saber cómo te fue.</p>
+<p>Te esperamos de vuelta cuando quieras.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
   }
