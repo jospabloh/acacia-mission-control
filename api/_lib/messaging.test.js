@@ -80,6 +80,12 @@ test('premium_data_deleted_confirmation confirma el borrado de Tutores, no de ni
   assert.doesNotMatch(out.html, /solo lectura/i)
 })
 
+test('usage_reminder: invitación motivacional, nunca menciona licencia/vencimiento', () => {
+  const out = renderMessage('usage_reminder', { app: messagingFor('flowfin'), tenantName: 'T' })
+  assert.match(out.subject, /hace tiempo/i)
+  assert.doesNotMatch(out.html, /licencia|vence|vencid|renovar|suspend/i)
+})
+
 test('trial_ended_downgraded_free: avisa que sigue en Gratis, no que se restringió nada', () => {
   const app = messagingFor('cateqhub')
   const out = renderMessage('trial_ended_downgraded_free', { app, tenantName: 'Parroquia San Juan' })

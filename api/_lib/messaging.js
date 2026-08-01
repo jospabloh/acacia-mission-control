@@ -154,6 +154,19 @@ ${ctx.body ? paras(ctx.body) : ''}
     }
   }
 
+  if (type === 'usage_reminder') {
+    // Recordatorio de uso — motivacional, sin culpa. Nunca menciona licencia,
+    // vencimiento ni riesgo de nada: es una invitación, no una advertencia.
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}hace tiempo que no te vemos por ${app.name} 🌱`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Notamos que hace un tiempo no entras a <span class="hi">${esc(app.name)}</span> — nada cambió, todo sigue tal como lo dejaste. Solo queríamos avisarte que seguimos aquí, listos para ayudarte con <strong>${esc(app.value)}</strong>.</p>
+<p>Si algo no te quedó claro o hay algo que podamos mejorar, respóndenos este correo — nos encantaría saber cómo te fue.</p>
+<p>Te esperamos de vuelta cuando quieras.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
   if (type === 'maintenance') {
     const m = ctx.maint ?? {}
     const win = [m.date && fmtDate(m.date), m.time && `a las ${esc(m.time)}`, m.duration && `(~${esc(m.duration)})`].filter(Boolean).join(' ')
