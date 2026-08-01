@@ -24,8 +24,16 @@ test('payment_confirmed: 1 mes se describe como "un mes" y sin referencia opcion
 test('renderMessage sigue soportando renewal y renewal_fyi (correos del día 1)', () => {
   const manual = renderMessage('renewal', { app, tenantName: 'T', date: '2026-07-20T00:00:00Z', days: 5 })
   assert.match(manual.subject, /renueva/i)
+  assert.match(manual.html, /vence el.*\(en 5 días\)/)
   const auto = renderMessage('renewal_fyi', { app, tenantName: 'T', date: '2026-08-01T00:00:00Z' })
   assert.match(auto.subject, /renueva solo/i)
+})
+
+test('renewal: licencia ya vencida dice "venció... hace N días", nunca "en -N días"', () => {
+  const out = renderMessage('renewal', { app, tenantName: 'T', date: '2026-07-01T00:00:00Z', days: -31 })
+  assert.match(out.html, /venció el.*\(hace 31 días\)/)
+  assert.doesNotMatch(out.html, /en -31 días/)
+  assert.doesNotMatch(out.html, /vence el/)
 })
 
 test('cateqhub: messagingFor resuelve destinatario vía User (parish_id/parish_role)', () => {

@@ -73,12 +73,22 @@ export function renderMessage(type, ctx) {
   const hello = ctx.tenantName ? `Hola <span class="hi">${esc(ctx.tenantName)}</span>,` : 'Hola,'
 
   if (type === 'renewal') {
-    const when = ctx.date ? `el <strong>${fmtDate(ctx.date)}</strong>${ctx.days != null ? ` (en ${ctx.days} días)` : ''}` : 'pronto'
+    // days puede llegar negativo (licencia ya vencida — el sweep del día 1 la
+    // atrapa aunque haya vencido semanas antes). "vence... (en -31 días)" lee
+    // como un bug; separamos vencida (venció, hace N días) de por vencer
+    // (vence, en N días) para que el correo siempre sea claro.
+    const overdue = ctx.days != null && ctx.days < 0
+    const plural = (n) => `${n} día${n === 1 ? '' : 's'}`
+    const when = ctx.date
+      ? overdue
+        ? `venció el <strong>${fmtDate(ctx.date)}</strong> (hace ${plural(Math.abs(ctx.days))})`
+        : `vence el <strong>${fmtDate(ctx.date)}</strong>${ctx.days != null ? ` (en ${plural(ctx.days)})` : ''}`
+      : 'vence pronto'
     return {
       subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}renueva tu licencia de ${app.name} y sigue sin interrupciones 🌿`,
       html: wrap(app.name, `<p>${hello}</p>
 <p>Sabemos lo importante que es <span class="hi">${esc(app.name)}</span> en tu día a día — para mantener <strong>${esc(app.value)}</strong> sin complicaciones. Queremos que sigas aprovechándolo sin pausas.</p>
-<p>Tu licencia vence ${when}. Renovar toma un minuto: escríbele a tu ejecutivo ACACIA o responde este correo y lo dejamos listo.</p>
+<p>Tu licencia ${when}. Renovar toma un minuto: escríbele a tu ejecutivo ACACIA o responde este correo y lo dejamos listo.</p>
 <p>Aquí estamos para lo que necesites.</p>
 <p>— Equipo <strong>ACACIA</strong></p>`),
     }
