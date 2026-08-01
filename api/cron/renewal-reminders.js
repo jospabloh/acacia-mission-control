@@ -13,7 +13,10 @@ import { messagingFor } from '../_lib/messaging.js'
 import { resolveRecipients, sendFollowup } from '../_lib/emailFollowup.js'
 import { licenseControlFor, buildLicenseChange } from '../_lib/licenseControl.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
-import { currentPeriodKey, qualifiesForReminder, reminderKindFor, shouldAutoRenew } from '../_lib/renewalReminders.js'
+import {
+  currentPeriodKey, qualifiesForReminder, reminderKindFor, shouldAutoRenew,
+  qualifiesForUpcomingReminder, upcomingPeriodKey,
+} from '../_lib/renewalReminders.js'
 
 const DAY = 86_400_000
 
@@ -116,6 +119,62 @@ async function runRenewalReminders(now) {
   return { period, apps: summary }
 }
 
+// Aviso previo (T-7 días) — barrido DIARIO, separado del sweep mensual de
+// arriba. Cubre el lado "antes de vencer" que el barrido del día 1 no puede:
+// ese solo mira el mes en curso, así que un tenant que vence el día 2 no oía
+// nada hasta el día 1 del mes siguiente. Solo pago manual (ver
+// qualifiesForUpcomingReminder) — cobro automático ya tiene su aviso el
+// día 1. Idempotente vía renewal_reminders con period = fecha de vencimiento
+// (no mes), así sale una sola vez por ciclo sin importar cuántos días corra
+// el cron dentro de la ventana.
+async function runUpcomingReminders(now) {
+  if (!bridgeConfigured()) return { skipped: 'bridge not configured', apps: [] }
+
+  const { data: apps, error } = await supabaseAdmin.from('apps').select('*').eq('backend', 'base44')
+  if (error) throw new Error(error.message)
+
+  const summary = []
+  for (const app of (apps ?? [])) {
+    const cfg = messagingFor(app.id)
+    if (!cfg) continue
+    const row = { app: app.id, sent: 0, skipped: 0, failed: 0 }
+
+    const { data: lics, error: lErr } = await supabaseAdmin
+      .from('licenses').select('external_id, current_period_end, auto_renew, status').eq('app_id', app.id)
+    if (lErr) { row.error = lErr.message; summary.push(row); continue }
+    const due = (lics ?? []).filter((l) => qualifiesForUpcomingReminder(l, now))
+    if (due.length === 0) { summary.push(row); continue }
+
+    let byId = {}
+    try {
+      const recipients = await resolveRecipients(app, cfg)
+      byId = Object.fromEntries(recipients.map((r) => [r.id, r]))
+    } catch (e) { row.error = `contactos: ${e.message}`; summary.push(row); continue }
+
+    for (const lic of due) {
+      const recipient = byId[lic.external_id]
+      if (!recipient?.email) { row.skipped++; continue }
+      const period = upcomingPeriodKey(lic)
+
+      const { error: claimErr } = await supabaseAdmin.from('renewal_reminders')
+        .insert({ app_id: app.id, external_id: lic.external_id, period, kind: 'renewal_upcoming', recipient: recipient.email })
+      if (claimErr) { row.skipped++; continue } // ya se avisó este ciclo
+
+      const days = Math.ceil((new Date(lic.current_period_end).getTime() - now.getTime()) / DAY)
+      const r = await sendFollowup(app, cfg, 'renewal_upcoming', recipient, { date: lic.current_period_end, days })
+      if (r.sent) row.sent++
+      else {
+        row.failed++
+        await supabaseAdmin.from('renewal_reminders').delete()
+          .eq('app_id', app.id).eq('external_id', lic.external_id).eq('period', period)
+      }
+    }
+    summary.push(row)
+  }
+
+  return { apps: summary }
+}
+
 export default async function handler(req, res) {
   // Mismo gate que el cron de sync: CRON_SECRET (Bearer) o header de Vercel cron.
   const secret = process.env.CRON_SECRET
@@ -124,9 +183,14 @@ export default async function handler(req, res) {
   }
   if (!requireSupabase(res)) return
 
+  // Dos schedules de vercel.json apuntan a este mismo archivo (mismo cupo de
+  // funciones de Vercel): el sweep mensual del día 1 (sin query) y el aviso
+  // previo diario (?mode=upcoming) — ver runUpcomingReminders arriba.
+  const upcoming = req.query?.mode === 'upcoming'
+
   try {
-    const result = await runRenewalReminders(new Date())
-    await audit('cron:renewal-reminders', { payload: result })
+    const result = upcoming ? await runUpcomingReminders(new Date()) : await runRenewalReminders(new Date())
+    await audit(upcoming ? 'cron:renewal-reminders:upcoming' : 'cron:renewal-reminders', { payload: result })
     return res.status(200).json({ ok: true, ...result })
   } catch (e) {
     return res.status(500).json({ error: e.message })

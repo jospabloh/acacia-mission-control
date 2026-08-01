@@ -94,6 +94,22 @@ export function renderMessage(type, ctx) {
     }
   }
 
+  if (type === 'renewal_upcoming') {
+    // Aviso previo (T-7 días), antes de que la licencia venza — para pago
+    // manual únicamente (quien tiene cobro automático ya tiene su propio
+    // aviso el día 1). Tono de heads-up, no de urgencia: todavía falta.
+    const days = Number(ctx.days) || 0
+    const plural = (n) => `${n} día${n === 1 ? '' : 's'}`
+    const when = ctx.date ? `el <strong>${fmtDate(ctx.date)}</strong>` : 'pronto'
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}tu licencia de ${app.name} vence en ${plural(days)} 🗓️`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Un aviso con tiempo: tu licencia de <span class="hi">${esc(app.name)}</span> vence ${when} (en ${plural(days)}). Todavía no pasa nada — solo queremos que no te agarre de sorpresa.</p>
+<p>Cuando quieras renovar, escríbele a tu ejecutivo ACACIA o responde este correo y lo dejamos listo, para que <strong>${esc(app.value)}</strong> siga sin interrupciones.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
   if (type === 'payment_confirmed') {
     // Agradecimiento tras confirmar un pago: la licencia queda activa por el
     // período pagado. Se dispara al presionar "Confirmar pago" (opcional).

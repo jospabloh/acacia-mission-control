@@ -29,6 +29,13 @@ test('renderMessage sigue soportando renewal y renewal_fyi (correos del día 1)'
   assert.match(auto.subject, /renueva solo/i)
 })
 
+test('renewal_upcoming: aviso previo, tono heads-up (no urgencia, todavía no vence)', () => {
+  const out = renderMessage('renewal_upcoming', { app, tenantName: 'T', date: '2026-07-08T00:00:00Z', days: 7 })
+  assert.match(out.subject, /vence en 7 días/)
+  assert.match(out.html, /vence el.*en 7 días/)
+  assert.doesNotMatch(out.html, /venci[óo]/i)
+})
+
 test('renewal: licencia ya vencida dice "venció... hace N días", nunca "en -N días"', () => {
   const out = renderMessage('renewal', { app, tenantName: 'T', date: '2026-07-01T00:00:00Z', days: -31 })
   assert.match(out.html, /venció el.*\(hace 31 días\)/)

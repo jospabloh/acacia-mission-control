@@ -9,6 +9,7 @@
   "crons": [
     { "path": "/api/cron/sync", "schedule": "0 8 * * *" },
     { "path": "/api/cron/renewal-reminders", "schedule": "0 15 1 * *" },
+    { "path": "/api/cron/renewal-reminders?mode=upcoming", "schedule": "0 15 * * *" },
     { "path": "/api/cron/license-lifecycle", "schedule": "0 9 * * *" }
   ]
 }
