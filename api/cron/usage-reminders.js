@@ -9,7 +9,7 @@ import { supabaseAdmin, requireSupabase, audit } from '../_lib/supabaseAdmin.js'
 import { bridgeConfigured } from '../_lib/appBridge.js'
 import { messagingFor } from '../_lib/messaging.js'
 import { resolveRecipients, sendFollowup } from '../_lib/emailFollowup.js'
-import { qualifiesForUsageReminder, usagePeriodKey } from '../_lib/usageReminders.js'
+import { qualifiesForUsageReminder, usagePeriodKey, HAS_NATIVE_REENGAGEMENT } from '../_lib/usageReminders.js'
 
 async function runUsageReminders(now) {
   if (!bridgeConfigured()) return { skipped: 'bridge not configured', apps: [] }
@@ -22,6 +22,10 @@ async function runUsageReminders(now) {
   for (const app of (apps ?? [])) {
     const cfg = messagingFor(app.id)
     if (!cfg) continue
+    if (HAS_NATIVE_REENGAGEMENT.has(app.id)) {
+      summary.push({ app: app.id, seen: 0, sent: 0, skipped: 0, failed: 0, skippedReason: 'native reengagement job' })
+      continue
+    }
     const row = { app: app.id, seen: 0, sent: 0, skipped: 0, failed: 0 }
 
     const { data: tenants, error: tErr } = await supabaseAdmin

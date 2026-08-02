@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { qualifiesForUsageReminder, usagePeriodKey } from './usageReminders.js'
+import { qualifiesForUsageReminder, usagePeriodKey, HAS_NATIVE_REENGAGEMENT } from './usageReminders.js'
 
 const NOW = new Date('2026-08-01T09:00:00Z')
 const OLD_TENANT = { external_id: 't1', created_at: '2026-01-01T00:00:00Z' }
@@ -46,4 +46,9 @@ test('created_date de Base44 (raw) tiene prioridad sobre created_at de Mission C
   // created_at de MC viejo (p.ej. onboarding tardío del registry).
   const tenant = { external_id: 't5', created_at: '2026-01-01T00:00:00Z', raw: { created_date: '2026-07-29T00:00:00Z' } }
   assert.equal(qualifiesForUsageReminder({ tenant, license: { status: 'active' }, now: NOW }), false)
+})
+
+test('HAS_NATIVE_REENGAGEMENT: puntos tiene su propio job (cleanupInactiveUsers) — Mission Control se abstiene', () => {
+  assert.ok(HAS_NATIVE_REENGAGEMENT.has('puntos'))
+  assert.equal(HAS_NATIVE_REENGAGEMENT.has('flowfin'), false)
 })

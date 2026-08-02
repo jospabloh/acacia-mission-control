@@ -22,6 +22,21 @@ const BLOCKED_STATUSES = new Set([
 const INACTIVITY_DAYS = 21
 const MIN_ACCOUNT_AGE_DAYS = 21 // tenant recién llegado: dale tiempo de onboarding antes de invitarlo a "volver"
 
+// Apps que ya tienen su propio job nativo de re-enganche por inactividad,
+// fuera de Mission Control — para esas, este cron se abstiene y deja que el
+// nativo sea la única fuente de "vuelve", para que un mismo destinatario no
+// reciba dos avisos de sistemas distintos.
+//
+// puntos: base44/functions/cleanupInactiveUsers (LoyaltyAccount.user_email,
+// 30 días de inactividad) — reactivado el 2026-07-28 (commit 9694d1c, v2.0.11)
+// tras estar roto (403) desde v1.4.7. Es una automatización de Base44, no una
+// entidad REST: no se puede leer ni apagar desde aquí sin el Base44 MCP
+// (no autorizado en esta sesión) — abstenerse en Mission Control es la
+// mitigación aplicable sin ese acceso. Público mayormente distinto (clientes
+// de lealtad vs. dueños de tenant), pero un mismo dueño-operador inscrito
+// como su propio LoyaltyAccount podría recibir ambos — de ahí la exclusión.
+export const HAS_NATIVE_REENGAGEMENT = new Set(['puntos'])
+
 function daysSince(iso, now) {
   if (!iso) return null
   const t = new Date(iso).getTime()
