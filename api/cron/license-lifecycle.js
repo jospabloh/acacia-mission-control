@@ -169,9 +169,16 @@ async function runStagedLifecycleForApp(app, cfg, week, now) {
 // Rama unificada (portafolio) — flowfin/stockflow/liuma/puntos/rumbo/radar.
 // Acumulado desde current_period_end (ya sincronizado, sin leer `raw`).
 // byId/msgCfg vienen resueltos del loop principal (código nuevo, sin
-// comportamiento previo que preservar).
-async function runUnifiedLifecycleForApp(app, cfg, byId, msgCfg, week, now) {
+// comportamiento previo que preservar). contactsError llega ya seteado desde
+// el loop principal si resolveRecipients falló ahí — en ese caso byId es {}
+// (ningún tenant tiene recipient, así que los envíos de correo son no-ops)
+// pero la función SIEMPRE corre completa, para que transiciones/enforcement
+// no dependan de que el bridge de contactos esté arriba. Mismo criterio que
+// runStagedLifecycleForApp (arriba): un fallo de contactos degrada el correo,
+// nunca aborta el control de acceso.
+async function runUnifiedLifecycleForApp(app, cfg, byId, msgCfg, week, now, contactsError) {
   const row = { app: app.id, transitioned: 0, reminded: 0, transitionFailed: 0, emailFailed: 0, enforcementGap: 0 }
+  if (contactsError) row.contactsError = contactsError
 
   const { data: lics, error: lErr } = await supabaseAdmin
     .from('licenses').select('external_id, plan, status, current_period_end').eq('app_id', app.id)
@@ -238,19 +245,25 @@ async function runLicenseLifecycle(now) {
       continue
     }
 
-    // Rama unificada (portafolio): resuelve contactos una vez aquí; si falla,
-    // se reporta y se salta el app esta corrida (comportamiento nuevo, sin
-    // equivalente previo que preservar para estos apps).
+    // Rama unificada (portafolio): resuelve contactos una vez aquí. Si falla,
+    // NO se salta el app — eso dejaría de aplicar view_only/suspended para
+    // todos sus tenants esta corrida (ver invariante arriba: una falla del
+    // lado de correo nunca debe suprimir la transición de control de acceso).
+    // En vez de eso, sigue con byId={} (los envíos de correo quedan como
+    // no-op, igual que hoy para un tenant individual sin recipient) y le pasa
+    // el error a runUnifiedLifecycleForApp para que lo adjunte al row —
+    // mismo patrón que runStagedLifecycleForApp.
     let byId = {}
+    let contactsError
     const msgCfg = messagingFor(app.id)
     if (msgCfg) {
       try {
         const recipients = await resolveRecipients(app, msgCfg)
         byId = Object.fromEntries(recipients.map((r) => [r.id, r]))
-      } catch (e) { summary.push({ app: app.id, contactsError: e.message }); continue }
+      } catch (e) { contactsError = e.message }
     }
 
-    summary.push(await runUnifiedLifecycleForApp(app, cfg, byId, msgCfg, week, now))
+    summary.push(await runUnifiedLifecycleForApp(app, cfg, byId, msgCfg, week, now, contactsError))
   }
 
   return { week, apps: summary }
