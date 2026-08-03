@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertConfirmable, evaluateClaim } from './payment-confirm.js'
+import { assertConfirmable, evaluateClaim, buildRollbackFailureLog } from './payment-confirm.js'
 
 test('assertConfirmable: rechaza un reporte ya confirmado', () => {
   const r = assertConfirmable({ confirmed_at: '2026-08-01T00:00:00Z' })
@@ -36,4 +36,21 @@ test('evaluateClaim: rechaza null/undefined igual que un array vacío', () => {
 test('evaluateClaim: acepta cuando el update afectó exactamente la fila reclamada', () => {
   const r = evaluateClaim([{ id: 'report-1', confirmed_at: '2026-08-03T00:00:00Z' }])
   assert.equal(r.ok, true)
+})
+
+// buildRollbackFailureLog covers the worst-case branch: callBridge failed AND
+// the rollback of the atomic claim also failed, so the report is left stuck
+// with confirmed_at set (assertConfirmable rejects any retry). This is the
+// only trace an operator has, so the message and audit payload must carry
+// both the reportId and both underlying error messages.
+test('buildRollbackFailureLog: incluye reportId y ambos mensajes de error', () => {
+  const info = buildRollbackFailureLog('report-1', 'bridge unreachable', 'db timeout')
+  assert.match(info.message, /report-1/)
+  assert.match(info.message, /bridge unreachable/)
+  assert.match(info.message, /db timeout/)
+  assert.deepEqual(info.auditPayload, {
+    reportId: 'report-1',
+    originalError: 'bridge unreachable',
+    rollbackError: 'db timeout',
+  })
 })

@@ -27,6 +27,20 @@ export function evaluateClaim(claimedRows) {
   return { ok: true }
 }
 
+// Pure builder for the "rollback of the claim also failed" case (used by the
+// catch-inside-a-catch below). Kept pure/exported so the message shape and
+// audit payload are unit-testable without mocking supabaseAdmin/callBridge.
+// This is the worst case for this handler: callBridge failed (nothing
+// applied) AND the rollback that should have freed the report for retry also
+// failed, so the report is left durably stuck with confirmed_at set — the
+// only trace an operator has is this log line + the audit row.
+export function buildRollbackFailureLog(reportId, originalError, rollbackError) {
+  return {
+    message: `[payment-confirm] CRITICAL: rollback failed for report ${reportId} after callBridge error — report is stuck confirmed_at set with nothing applied. originalError=${originalError} rollbackError=${rollbackError}`,
+    auditPayload: { reportId, originalError, rollbackError },
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
   if (!requireSupabase(res)) return
@@ -112,9 +126,26 @@ export default async function handler(req, res) {
     // stamped confirmed_by/confirmed_at, but nothing was actually applied.
     // Roll it back so the report reads as pending again and a retry (or a
     // concurrent request) isn't permanently locked out by our own claim.
-    await supabaseAdmin.from('payment_reports')
-      .update({ confirmed_by: null, confirmed_at: null })
-      .eq('id', reportId)
+    //
+    // This rollback write is itself not guaranteed to succeed (transient DB
+    // blip, etc). If it fails too, the report is left stuck with
+    // confirmed_at set — assertConfirmable rejects any future attempt with
+    // already_confirmed, so nothing will ever retry it on its own. That state
+    // must never be silent: log loudly and leave an audit row so an operator
+    // can find and manually reset it.
+    try {
+      const { error: rollbackErr } = await supabaseAdmin.from('payment_reports')
+        .update({ confirmed_by: null, confirmed_at: null })
+        .eq('id', reportId)
+      if (rollbackErr) throw rollbackErr
+    } catch (rollbackException) {
+      const info = buildRollbackFailureLog(reportId, e.message, rollbackException.message)
+      console.error(info.message)
+      await audit('control:payment-confirm-rollback-failed', {
+        actor: member.user_id, actor_email: member.email, target_app: report.app_id, target_id: report.external_id,
+        payload: info.auditPayload,
+      })
+    }
     return res.status(502).json({ error: e.message })
   }
 }
