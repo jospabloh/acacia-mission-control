@@ -275,7 +275,7 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
     // Activar un plan de pago sin billing automatizado (hoy solo cateqhub) arranca
     // el reloj del ciclo de vida manualmente: sella cuándo vence este período
     // Premium para que el cron license-lifecycle sepa cuándo empezar a contar.
-    if (cfg.lifecycle?.paidPlanValues?.includes(plan)) {
+    if (cfg.lifecycle?.periodEndField && cfg.lifecycle.paidPlanValues?.includes(plan)) {
       const when = now ? new Date(now) : new Date()
       const periodEnd = new Date(when.getTime())
       periodEnd.setUTCDate(periodEnd.getUTCDate() + 30)

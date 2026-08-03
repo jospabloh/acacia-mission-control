@@ -225,3 +225,31 @@ test("lifecycle unificado: rumbo excluye 'trial' de paidPlanValues (confirmado e
   assert.ok(cfg.plans.includes('trial')) // rumbo sí tiene 'trial' como plan real...
   assert.ok(!cfg.lifecycle.paidPlanValues.includes('trial')) // ...pero no es un plan pago vencible
 })
+
+// ── regresión: set_plan NO debe estampar una llave "undefined" en los 6 apps ──
+// que ganaron paidPlanValues (commit 9d8995c) pero no tienen periodEndField.
+// Solo cateqhub tiene periodEndField — el gate de arriba en buildLicenseChange
+// debe requerir AMBOS (periodEndField Y paidPlanValues.includes(plan)), no solo
+// el segundo, o patch[undefined] = ... se cuela como llave "undefined" literal.
+
+test('set_plan en los 6 apps sin periodEndField: patch tiene EXACTAMENTE una llave (planField), nunca "undefined"', () => {
+  const cases = [
+    ['flowfin', 'home'],
+    ['stockflow', 'start'],
+    ['liuma', 'start'],
+    ['puntos', 'starter'],
+    ['rumbo', 'starter'],
+    ['radar', 'starter'],
+  ]
+  for (const [id, plan] of cases) {
+    const cfg = licenseControlFor(id)
+    assert.equal(cfg.lifecycle.periodEndField, undefined, `${id} no debería tener periodEndField`)
+    assert.ok(cfg.lifecycle.paidPlanValues.includes(plan), `${id}: '${plan}' debería ser un paidPlanValue de prueba`)
+
+    const { patch, error } = buildLicenseChange(id, 'set_plan', { plan, now: NOW })
+    assert.equal(error, undefined, `${id} set_plan no debería fallar`)
+    assert.deepEqual(Object.keys(patch), [cfg.planField], `${id}: patch debería tener solo [${cfg.planField}]`)
+    assert.equal(patch.undefined, undefined, `${id}: patch NO debería tener una llave "undefined"`)
+    assert.equal('undefined' in patch, false, `${id}: patch NO debería tener la llave literal "undefined"`)
+  }
+})
