@@ -1,7 +1,7 @@
 // api/_lib/portfolioLifecycle.test.js
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { computePortfolioLifecycleStage, emailKindForStage, filterPaidLicenses } from './portfolioLifecycle.js'
+import { computePortfolioLifecycleStage, emailKindForStage, filterPaidLicenses, shouldDowngradeToFree, weekBucketKey } from './portfolioLifecycle.js'
 import { licenseControlFor } from './licenseControl.js'
 
 const CFG = {
@@ -107,4 +107,78 @@ test('un tenant Rumbo pagado (starter) muy vencido SÍ pasa el filtro y sí entr
   const lic = { external_id: 'paid-tenant', plan: 'starter', status: 'active', current_period_end: '2026-06-01T00:00:00Z' }
   assert.deepEqual(filterPaidLicenses([lic], cfg), [lic])
   assert.notEqual(computePortfolioLifecycleStage(lic, cfg.lifecycle, now), null)
+})
+
+// ── CateqHub migrado al ciclo unificado (2026-08-03, directiva "no
+// exceptions" del owner) — tests portados de licenseLifecycle.test.js
+// (archivo retirado) para el modelo por-etapa que este reemplaza, adaptados
+// al modelo acumulado. ──────────────────────────────────────────────────────
+
+const CATEQHUB_CFG = {
+  graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45,
+  readOnlyStatus: 'read_only', blockedStatus: 'access_denied',
+  exportConfirmedField: 'export_confirmed_at',
+  emailKinds: { read_only: 'premium_read_only_reminder', blocked: 'premium_access_denied_reminder' },
+}
+
+test('exportConfirmedField: sin exportación confirmada, avanza normalmente día 30 → inactive', () => {
+  const lic = { plan: 'premium', current_period_end: '2026-07-04T00:00:00Z', export_confirmed_at: null } // 30 días vencido
+  assert.deepEqual(computePortfolioLifecycleStage(lic, CATEQHUB_CFG, NOW), { stage: 'inactive', targetStatus: 'access_denied' })
+})
+
+test('exportConfirmedField: con exportación ya confirmada, el ciclo NUNCA avanza más allá de blocked (ni inactive ni deletion_eligible)', () => {
+  const overdue30 = { plan: 'premium', current_period_end: '2026-07-04T00:00:00Z', export_confirmed_at: '2026-07-20T00:00:00Z' } // 30 días
+  const overdue60 = { plan: 'premium', current_period_end: '2026-06-04T00:00:00Z', export_confirmed_at: '2026-07-20T00:00:00Z' } // 60 días
+  assert.deepEqual(computePortfolioLifecycleStage(overdue30, CATEQHUB_CFG, NOW), { stage: 'blocked', targetStatus: 'access_denied' })
+  assert.deepEqual(computePortfolioLifecycleStage(overdue60, CATEQHUB_CFG, NOW), { stage: 'blocked', targetStatus: 'access_denied' })
+})
+
+test('exportConfirmedField: no afecta la transición temprana a read_only (solo frena antes de inactive/deletion_eligible)', () => {
+  const lic = { plan: 'premium', current_period_end: '2026-07-26T00:00:00Z', export_confirmed_at: '2026-01-01T00:00:00Z' } // 8 días vencido
+  assert.deepEqual(computePortfolioLifecycleStage(lic, CATEQHUB_CFG, NOW), { stage: 'read_only', targetStatus: 'read_only' })
+})
+
+test('emailKindForStage: CateqHub usa su copy propio (mención de exportación de Tutores) vía override, no el genérico', () => {
+  assert.equal(emailKindForStage('read_only', CATEQHUB_CFG.emailKinds), 'premium_read_only_reminder')
+  assert.equal(emailKindForStage('blocked', CATEQHUB_CFG.emailKinds), 'premium_access_denied_reminder')
+  // inactive/deletion_eligible sin override propio → cae al genérico/null.
+  assert.equal(emailKindForStage('inactive', CATEQHUB_CFG.emailKinds), 'license_inactive_warning')
+  assert.equal(emailKindForStage('deletion_eligible', CATEQHUB_CFG.emailKinds), null)
+})
+
+test('emailKindForStage: sin overrides, comportamiento genérico sin cambios', () => {
+  assert.equal(emailKindForStage('read_only', undefined), 'license_read_only')
+  assert.equal(emailKindForStage('blocked'), 'license_blocked')
+})
+
+const FREE_DOWNGRADE = { childCap: 50, freePlanValue: 'free', usage: { entity: 'Child', tenantField: 'parish_id', filterField: 'active', filterValue: true } }
+
+test('shouldDowngradeToFree: baja a gratis si el consumo está en el tope o por debajo', () => {
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, 'read_only', 50), true)
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, 'read_only', 0), true)
+})
+
+test('shouldDowngradeToFree: no baja a gratis si el consumo supera el tope', () => {
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, 'read_only', 51), false)
+})
+
+test('shouldDowngradeToFree: nunca arriesga el downgrade si el conteo no se pudo resolver', () => {
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, 'read_only', null), false)
+})
+
+test('shouldDowngradeToFree: solo aplica a la etapa read_only, no a las siguientes', () => {
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, 'blocked', 10), false)
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, 'deletion_eligible', 10), false)
+})
+
+test('shouldDowngradeToFree: sin config freeDowngrade o sin etapa, nunca baja', () => {
+  assert.equal(shouldDowngradeToFree(undefined, 'read_only', 10), false)
+  assert.equal(shouldDowngradeToFree(FREE_DOWNGRADE, null, 10), false)
+})
+
+test('weekBucketKey: mismo lunes UTC para toda la semana', () => {
+  // 2026-08-01 es sábado; el lunes de esa semana es 2026-07-27.
+  assert.equal(weekBucketKey(new Date('2026-08-01T23:00:00Z')), '2026-07-27')
+  assert.equal(weekBucketKey(new Date('2026-07-27T00:00:00Z')), '2026-07-27')
+  assert.equal(weekBucketKey(new Date('2026-08-02T00:00:00Z')), '2026-07-27') // domingo, misma semana
 })

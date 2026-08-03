@@ -193,10 +193,20 @@ test('lifecycle unificado: los 6 apps de licencia de asiento tienen read-only y 
   }
 })
 
-test('cateqhub conserva su propio lifecycle por-etapa (NO se toca en este plan)', () => {
+test('cateqhub se sumó al ciclo unificado 8/15/30/45 el 2026-08-03 (directiva "no exceptions" del owner)', () => {
   const cfg = licenseControlFor('cateqhub')
-  assert.equal(cfg.lifecycle.graceDaysToReadOnly, 15) // sigue siendo el suyo, no 8
-  assert.ok(cfg.lifecycle.sinceFields) // forma CateqHub, distinta de la unificada
+  assert.equal(cfg.lifecycle.graceDaysToReadOnly, 8)
+  assert.equal(cfg.lifecycle.graceDaysToBlocked, 15)
+  assert.equal(cfg.lifecycle.graceDaysToInactive, 30)
+  assert.equal(cfg.lifecycle.graceDaysToDeletionEligible, 45)
+  assert.equal(cfg.lifecycle.readOnlyStatus, cfg.statuses.view_only)
+  assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
+  assert.equal(cfg.lifecycle.sinceFields, undefined) // ya no existe el modelo por-etapa
+  // Lo que sí sigue siendo propio de cateqhub: el freno de exportConfirmed y
+  // su copy de correo (ver portfolioLifecycle.test.js para la lógica).
+  assert.equal(cfg.lifecycle.exportConfirmedField, 'export_confirmed_at')
+  assert.deepEqual(cfg.lifecycle.emailKinds, { read_only: 'premium_read_only_reminder', blocked: 'premium_access_denied_reminder' })
+  assert.equal(cfg.lifecycle.periodEndField, 'premium_period_end_at') // sigue siendo el único app con activación manual de plan
 })
 
 test("plan oculto 'founder' disponible en los 6 apps de licencia de asiento", () => {
