@@ -13,7 +13,7 @@ import { messagingFor } from '../_lib/messaging.js'
 import { resolveRecipients, sendFollowup } from '../_lib/emailFollowup.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { computeLifecycleTransition, reminderKindFor, weekBucketKey, shouldDowngradeToFree } from '../_lib/licenseLifecycle.js'
-import { computePortfolioLifecycleStage, emailKindForStage } from '../_lib/portfolioLifecycle.js'
+import { computePortfolioLifecycleStage, emailKindForStage, filterPaidLicenses } from '../_lib/portfolioLifecycle.js'
 
 // Extrae del `raw` (registro completo de Base44, guardado por el sync) los
 // campos del ciclo de vida que no tienen columna dedicada en la bodega.
@@ -164,16 +164,6 @@ async function runStagedLifecycleForApp(app, cfg, week, now) {
 
   if (didTransition) { try { await syncLicensesForApp(app) } catch { /* best-effort */ } }
   return row
-}
-
-// Filtra a solo licencias con plan en cfg.lifecycle.paidPlanValues — igual
-// criterio que la rama staged (arriba, `premium`), pero para el ciclo
-// unificado. Sin esto, un tenant en un plan no-pago (p.ej. 'trial') con
-// current_period_end vencido se cuela al enforcement — confirmado en
-// producción con un tenant Rumbo en plan 'trial' 6 días vencido. Pura y
-// exportada para poder testearla sin supabaseAdmin (ver license-lifecycle.test.js).
-export function filterPaidLicenses(lics, cfg) {
-  return (lics ?? []).filter((l) => cfg.lifecycle.paidPlanValues.includes(l.plan))
 }
 
 // Rama unificada (portafolio) — flowfin/stockflow/liuma/puntos/rumbo/radar.

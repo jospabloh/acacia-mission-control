@@ -59,3 +59,17 @@ export function emailKindForStage(stage) {
   if (stage === 'inactive') return 'license_inactive_warning'
   return null
 }
+
+// Filtra a solo licencias con plan en cfg.lifecycle.paidPlanValues — igual
+// criterio que la rama staged (runStagedLifecycleForApp, `premium`), pero
+// para el ciclo unificado. Sin esto, un tenant en un plan no-pago (p.ej.
+// 'trial') con current_period_end vencido se cuela al enforcement —
+// confirmado en producción con un tenant Rumbo en plan 'trial' 6 días
+// vencido. Pura y exportada para poder testearla sin supabaseAdmin (ver
+// portfolioLifecycle.test.js). Vive aquí (no en api/cron/license-lifecycle.js)
+// porque es lógica pura sin I/O sobre qué licencias califican para el ciclo
+// unificado — mismo criterio que computePortfolioLifecycleStage/emailKindForStage
+// de arriba.
+export function filterPaidLicenses(lics, cfg) {
+  return (lics ?? []).filter((l) => cfg.lifecycle.paidPlanValues.includes(l.plan))
+}
