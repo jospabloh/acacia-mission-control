@@ -41,14 +41,21 @@ test('día 15 (acumulado): blocked', () => {
   assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'blocked', targetStatus: 'suspended' })
 })
 
-test('día 30 (acumulado): inactive, sin targetStatus (bookkeeping interno, no se escribe al app)', () => {
+test('día 30 (acumulado): inactive, targetStatus = cfg.blockedStatus (bookkeeping interno pero igual asegura el bloqueo)', () => {
   const lic = { plan: 'pro', status: 'suspended', current_period_end: '2026-07-04T00:00:00Z' } // 30 días vencido
-  assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'inactive', targetStatus: null })
+  assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'inactive', targetStatus: CFG.blockedStatus })
 })
 
-test('día 45 (acumulado): deletion_eligible, sin targetStatus', () => {
+test('día 45 (acumulado): deletion_eligible, targetStatus = cfg.blockedStatus', () => {
   const lic = { plan: 'pro', status: 'suspended', current_period_end: '2026-06-19T00:00:00Z' } // 45 días vencido
-  assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'deletion_eligible', targetStatus: null })
+  assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'deletion_eligible', targetStatus: CFG.blockedStatus })
+})
+
+test('día 30, tenant observado por primera vez ya muy vencido (nunca pasó por blocked): targetStatus sigue siendo cfg.blockedStatus', () => {
+  // Simula un tenant que arrancó en 'active' (nunca escrito a 'suspended' porque
+  // el cron recién arranca / el bridge estuvo caído / onboarding a mitad de ciclo).
+  const lic = { plan: 'pro', status: 'active', current_period_end: '2026-07-04T00:00:00Z' } // 30 días vencido
+  assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'inactive', targetStatus: 'suspended' })
 })
 
 test('emailKindForStage: mapea read_only/blocked/inactive, deletion_eligible no manda correo al tenant', () => {

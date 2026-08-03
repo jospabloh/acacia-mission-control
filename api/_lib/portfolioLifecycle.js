@@ -10,8 +10,15 @@
 //   - read_only y blocked solo escriben al app si cfg.readOnlyStatus/blockedStatus
 //     existen (rumbo/radar no tienen read-only en su schema hoy — targetStatus
 //     queda null, pero la etapa se sigue reportando para mandar el correo).
-//   - inactive y deletion_eligible son bookkeeping interno de Mission Control:
-//     nunca escriben nada al app (targetStatus siempre null).
+//   - inactive y deletion_eligible son bookkeeping interno de Mission Control
+//     (etapas distintas para elegir correo/futuras revisiones), pero su
+//     targetStatus es el MISMO cfg.blockedStatus que `blocked` — así un
+//     tenant observado por primera vez YA muy vencido (día 30/45 desde el
+//     arranque del cron, un bridge caído semanas, u onboarding a mitad de
+//     ciclo) igual queda bloqueado, en vez de quedarse en su status previo
+//     para siempre porque nunca pasó por el escalón `blocked`. El guard
+//     `lic.status !== targetStatus` en el cron ya hace esto un no-op para
+//     quien ya estaba bloqueado desde el día 15.
 //   - deletion_eligible nunca manda correo al tenant — solo alerta interna
 //     (ver Licenses.jsx, fuera de este plan). El borrado real nunca es automático.
 //   - plan === 'founder' NUNCA entra al ciclo (plan oculto, vitalicio por
@@ -41,9 +48,9 @@ export function computePortfolioLifecycleStage(license, cfg, now = new Date()) {
     return { stage: 'blocked', targetStatus: cfg.blockedStatus ?? null }
   }
   if (days < cfg.graceDaysToDeletionEligible) {
-    return { stage: 'inactive', targetStatus: null }
+    return { stage: 'inactive', targetStatus: cfg.blockedStatus ?? null }
   }
-  return { stage: 'deletion_eligible', targetStatus: null }
+  return { stage: 'deletion_eligible', targetStatus: cfg.blockedStatus ?? null }
 }
 
 export function emailKindForStage(stage) {
