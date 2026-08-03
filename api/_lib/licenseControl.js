@@ -165,10 +165,10 @@ const APPS = {
     // tareas/pulseras) — no una penalización. Toda parroquia nueva arranca en
     // plan=premium con 30 días de prueba (premium_period_end_at). Si ese
     // período vence sin renovarse:
-    //   - freeDowngrade.childCap niños activos o menos → license-lifecycle.js
-    //     (el cron, no esta lógica pura) baja la parroquia directo a
-    //     plan="free" antes de aplicar la transición a read_only — ver
-    //     applyFreeDowngradeIfEligible en ese archivo.
+    //   - freeDowngrade.childCap niños activos o menos → api/cron/
+    //     license-lifecycle.js baja la parroquia directo a plan="free" antes
+    //     de aplicar la transición a read_only (hook genérico, gateado en
+    //     cfg.freeDowngrade — no hardcodeado a cateqhub).
     //   - más de freeDowngrade.childCap → sigue el ciclo de abajo
     //     (lifecycle), que restringe TODA la app (no solo Tutores) hasta
     //     pagar el nivel Premium que corresponda.
@@ -181,14 +181,42 @@ const APPS = {
       freePlanValue: 'free',
       usage: { entity: 'Child', tenantField: 'parish_id', filterField: 'active', filterValue: true },
     },
+    // Ciclo unificado (portafolio) — ver docs/superpowers/specs/2026-08-03-
+    // portfolio-license-lifecycle-design.md. Hasta 2026-08-03, CateqHub tenía
+    // su PROPIO ciclo por-etapa (15 días activo→read_only, 15 más
+    // read_only→access_denied, 30 más access_denied→deletion_eligible, con
+    // since-fields independientes por etapa) — el owner de la plataforma
+    // pidió explícitamente "no exceptions": mismo umbral acumulado 8/15/30/45
+    // desde periodEndField que los otros 6 apps, sin sinceFields. Su
+    // diferencia real de negocio (freeDowngrade arriba, mirror arriba,
+    // exportConfirmedField abajo, y el copy de correo propio en emailKinds)
+    // se preserva vía hooks genéricos del cron — ver
+    // api/cron/license-lifecycle.js.
+    //
+    // Cambio de comportamiento en vivo: el período de gracia antes de
+    // read_only se ACORTA de 15 días a 8 el día que este cambio se
+    // deploya (el cron de Mission Control no requiere un deploy aparte de
+    // Base44, a diferencia de los cambios de schema) — una parroquia que
+    // hoy está, por ejemplo, 10 días vencida y todavía "active" bajo el
+    // modelo viejo, pasará a read_only en la primera corrida tras el merge.
     lifecycle: {
       paidPlanValues: ['premium'],
-      graceDaysToReadOnly: 15,
-      graceDaysToAccessDenied: 15,
-      graceDaysToDeletionEligible: 30,
-      sinceFields: { read_only: 'read_only_since', access_denied: 'access_denied_since', deletion_eligible: 'deletion_eligible_since' },
-      exportConfirmedField: 'export_confirmed_at',
+      graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45,
+      readOnlyStatus: 'read_only', blockedStatus: 'access_denied',
       periodEndField: 'premium_period_end_at',
+      // exportConfirmedField: si la parroquia ya confirmó su exportación de
+      // Tutores, el ciclo nunca avanza más allá de `blocked` (ver
+      // computePortfolioLifecycleStage) — mismo freno que el modelo por-etapa
+      // tenía en el paso access_denied → deletion_eligible.
+      exportConfirmedField: 'export_confirmed_at',
+      // emailKinds: CateqHub conserva su copy propio (menciona la
+      // exportación de Tutores explícitamente) en vez del genérico
+      // license_read_only/license_blocked — ver messaging.js. inactive y
+      // deletion_eligible no tienen override propio (inactive es una etapa
+      // nueva que el modelo por-etapa no tenía; cae al genérico
+      // license_inactive_warning, y deletion_eligible nunca manda correo en
+      // ningún modelo).
+      emailKinds: { read_only: 'premium_read_only_reminder', blocked: 'premium_access_denied_reminder' },
     },
   },
 }

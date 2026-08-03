@@ -6,37 +6,47 @@
 **Dispara:** incidente real — StockFlow bloqueó el tenant `baristop` el 2026-08-01
 (vencimiento 2026-07-31) sin ningún aviso graduado de Mission Control.
 
-## ⚠️ Supuestos que necesitan confirmación
+## ✅ Supuestos — resueltos (2026-08-03, respuesta directa del owner)
 
-El usuario dio la especificación completa pero dejó 4 preguntas de clarificación
-sin responder (las descartó explícitamente — "dismissed", esperando retomarlas
-después) antes de instruir "haz que esto pase, Mission Control debe ser la
-única autoridad". Este documento avanza con la interpretación más razonable de
-cada punto ambiguo, **marcada explícitamente abajo**, para no bloquear el
-trabajo — pero cada una debe confirmarse antes o durante la implementación:
+Este documento originalmente avanzó con 4 supuestos sin confirmar (ver historial
+de git para el texto original). El owner de la plataforma los respondió
+directamente ese mismo día:
 
-1. **CateqHub como excepción.** Este diseño trata a CateqHub como la excepción
-   explícita que el propio mensaje del usuario permite ("a menos que se indique
-   lo contrario") — mantiene su ciclo actual (freemium + Tutores como add-on,
-   15/15/30 días, sin cobro automático), documentado en
-   `docs/superpowers/specs/2026-07-23-cateqhub-premium-license-lifecycle-design.md`.
-   El esquema nuevo unificado (7/15/30/45) aplica a FlowFin, StockFlow, LIUMA,
-   Puntos+, Rumbo y Radar.
+1. **CateqHub NO es la excepción — "no exceptions".** El supuesto original (que
+   CateqHub mantenía su propio ciclo por-etapa 15/15/30) fue rechazado
+   explícitamente. CateqHub se migró al mismo ciclo acumulado 8/15/30/45 que
+   los otros 6 apps — ver `api/_lib/licenseControl.js#cateqhub`,
+   `api/cron/license-lifecycle.js` (ya no existe una rama "staged" separada) y
+   `docs/superpowers/specs/2026-07-23-cateqhub-premium-license-lifecycle-design.md`
+   (actualizado). Su lógica de negocio realmente distinta (freemium
+   `freeDowngrade`, `mirror` a `User` por la limitación de RLS de Base44, el
+   freno de `exportConfirmedField` antes de `deletion_eligible`, y su copy de
+   correo propio mencionando la exportación de Tutores) se preservó como hooks
+   genéricos gateados en `cfg`, no hardcodeados a `'cateqhub'` — cualquier app
+   futura con las mismas necesidades los reutiliza sin reintroducir una rama
+   separada. **Cambio de comportamiento en vivo:** el período de gracia antes
+   de read-only se acorta de 15 a 8 días desde el primer cron tras el merge —
+   sin gate de deploy de Base44 de por medio (a diferencia de los cambios de
+   schema, este es código de Mission Control, se activa solo con el merge).
 2. **Cómputo de días: acumulado desde el vencimiento original**, no desde la
-   etapa anterior. Día 8 = read-only. Día 15 = bloqueo + exportación. Día 30 =
-   inactivo. Día 45 = elegible para borrado (nunca automático).
-3. **Monto prorrateado: fuera de alcance de este plan.** No existen precios de
-   plan estructurados para FlowFin/StockFlow/LIUMA/Puntos+/Rumbo/Radar en
-   Mission Control (solo CateqHub los documenta, y solo en comentarios). Este
-   diseño implementa fechas/estados/correos/confirmación de pago **sin mostrar
-   un monto calculado** — el operador ve días vencidos, no un $ prorrateado.
-   Cuando el usuario provea la tabla de precios por app/plan, se agrega como
-   una fase separada.
-4. **Aviso de pago: registrado por un operador, no autoservicio del tenant.**
-   Los tenants no tienen acceso a Mission Control. Un admin de Mission Control
-   registra "pago reportado" (monto, referencia, fuente) cuando el tenant avisa
-   por su canal habitual (WhatsApp/correo/ticket) — eso crea el pendiente. Solo
-   rol `owner` puede confirmarlo, lo cual dispara `confirm_payment` de verdad.
+   etapa anterior — confirmado sin cambios. Día 8 = read-only. Día 15 =
+   bloqueo + exportación. Día 30 = inactivo. Día 45 = elegible para borrado
+   (nunca automático).
+3. **Monto prorrateado: NO se construye — Mercado Pago ya lo resuelve.** El
+   owner confirmó que no hace falta una calculadora de prorrateo en Mission
+   Control ("no bother mercado pago does it") — Mercado Pago calcula y cobra el
+   monto correspondiente directamente en su propio flujo de cobro. Mission
+   Control sigue mostrando fechas/estados, no un $ calculado, y esto ya no es
+   un supuesto pendiente sino una decisión de alcance definitiva.
+4. **Confirmación de pago: manual por el platform owner, por ahora.** Aunque el
+   owner recibe notificación directa de Mercado Pago en cobros automáticos, la
+   confirmación en Mission Control (`confirm_payment`, que efectivamente
+   renueva la licencia) se mantiene manual — el owner la dispara él mismo tras
+   verificar el cobro, tanto para pagos manuales como automáticos. El webhook
+   de Mercado Pago ya existente (`api/webhooks/mercadopago.js`) solo alimenta
+   `revenue_events` (reporting) — **no** está conectado a `payment_reports` ni
+   a `confirm_payment`, y por decisión explícita del owner se queda así "por
+   ahora": no se construye auto-confirmación automática desde el webhook.
 
 ## Problema (hallazgos concretos de esta sesión)
 

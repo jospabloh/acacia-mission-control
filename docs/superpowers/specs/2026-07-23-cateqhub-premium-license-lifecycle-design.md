@@ -1,5 +1,16 @@
 # Diseño — Ciclo de vida de licencia Premium con exportación y borrado (CateqHub)
 
+> **⚠️ Actualización 2026-08-03:** los umbrales de días (15/15/30) y el modelo
+> por-etapa con since-fields independientes descritos en este documento fueron
+> **retirados** — el owner de la plataforma pidió explícitamente "no
+> exceptions" en `docs/superpowers/specs/2026-08-03-portfolio-license-lifecycle-design.md`.
+> CateqHub ahora usa el mismo ciclo acumulado 8/15/30/45 que el resto del
+> portafolio (`api/_lib/licenseControl.js#cateqhub` en `acacia-mission-control`).
+> Lo que SÍ sigue vigente de este documento: el modelo de negocio (freemium +
+> Tutores como add-on Premium), el freno de exportación antes del borrado, el
+> mirror hacia `User`, y el flujo de borrado manual — solo cambió CUÁNDO se
+> dispara cada etapa, no QUÉ hace cada una. Ver el nuevo doc para el detalle.
+
 **Fecha:** 2026-07-23
 **Rama:** `claude/asistencia-licencias-datos-sensibles-52jhi2`
 **Pillar afectado:** Licencias / Cumplimiento de datos sensibles

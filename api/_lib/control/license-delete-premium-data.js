@@ -129,13 +129,13 @@ export default async function handler(req, res) {
       })
     }
     const activeStatus = cfg.statuses.active
-    const resetPatch = {
-      [cfg.planField]: freePlan, [cfg.statusField]: activeStatus,
-      [cfg.lifecycle.sinceFields.read_only]: null,
-      [cfg.lifecycle.sinceFields.access_denied]: null,
-      [cfg.lifecycle.sinceFields.deletion_eligible]: null,
-      [cfg.lifecycle.exportConfirmedField]: null,
-    }
+    // Desde el ciclo unificado (2026-08-03), Mission Control ya no rastrea
+    // since-fields por etapa (read_only_since/access_denied_since/
+    // deletion_eligible_since) — el schema de Parish todavía los define
+    // (base44/entities/Parish.jsonc), pero ningún frontend los muestra y el
+    // cron ya no los escribe, así que no hace falta limpiarlos acá tampoco.
+    const resetPatch = { [cfg.planField]: freePlan, [cfg.statusField]: activeStatus }
+    if (cfg.lifecycle.exportConfirmedField) resetPatch[cfg.lifecycle.exportConfirmedField] = null
     const mirror = cfg.mirror
       ? [{ entity: cfg.mirror.entity, matchField: cfg.mirror.matchField, fields: { [cfg.mirror.fields.plan]: freePlan, [cfg.mirror.fields.license_status]: activeStatus } }]
       : undefined
