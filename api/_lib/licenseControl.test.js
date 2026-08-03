@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor, deriveMirror } from './licenseControl.js'
+import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor, deriveMirror, plansFor } from './licenseControl.js'
 
 // Fixed clock so every assertion is deterministic.
 const NOW = new Date('2026-06-15T12:00:00Z')
@@ -172,4 +172,39 @@ test('deriveMirror: solo incluye campos presentes en el patch, con su valor nuev
   ])
   assert.deepEqual(deriveMirror(cfg, { name: 'Parroquia X' }), undefined)
   assert.deepEqual(deriveMirror({ mirror: undefined }, { plan: 'premium' }), undefined)
+})
+
+// ── lifecycle unificado (portafolio) + plan oculto 'founder' ─────────────────
+
+test('lifecycle unificado: flowfin/stockflow/liuma/puntos tienen read-only y bloqueo', () => {
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos']) {
+    const cfg = licenseControlFor(id)
+    assert.equal(cfg.lifecycle.graceDaysToReadOnly, 8)
+    assert.equal(cfg.lifecycle.graceDaysToBlocked, 15)
+    assert.equal(cfg.lifecycle.graceDaysToInactive, 30)
+    assert.equal(cfg.lifecycle.graceDaysToDeletionEligible, 45)
+    assert.equal(cfg.lifecycle.readOnlyStatus, cfg.statuses.view_only)
+    assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
+  }
+})
+
+test('lifecycle unificado: rumbo y radar NO tienen read-only en su schema (readOnlyStatus null)', () => {
+  for (const id of ['rumbo', 'radar']) {
+    const cfg = licenseControlFor(id)
+    assert.equal(cfg.lifecycle.readOnlyStatus, null)
+    assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
+  }
+})
+
+test('cateqhub conserva su propio lifecycle por-etapa (NO se toca en este plan)', () => {
+  const cfg = licenseControlFor('cateqhub')
+  assert.equal(cfg.lifecycle.graceDaysToReadOnly, 15) // sigue siendo el suyo, no 8
+  assert.ok(cfg.lifecycle.sinceFields) // forma CateqHub, distinta de la unificada
+})
+
+test("plan oculto 'founder' disponible en los 6 apps de licencia de asiento", () => {
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos', 'rumbo', 'radar']) {
+    assert.ok(plansFor(id).includes('founder'), `${id} debería listar founder`)
+  }
+  assert.ok(!plansFor('cateqhub').includes('founder')) // CateqHub no tiene licencia de asiento
 })

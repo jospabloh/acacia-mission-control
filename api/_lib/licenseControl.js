@@ -29,45 +29,62 @@ const APPS = {
   flowfin: {
     entity: 'Family', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: ['home', 'family_plus', 'circle'],
+    plans: ['home', 'family_plus', 'circle', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'full', dayConvention: 'first_of_month' },
+    // Ciclo de vida unificado (portafolio) — ver
+    // docs/superpowers/specs/2026-08-03-portfolio-license-lifecycle-design.md.
+    // Acumulado desde current_period_end, NO por-etapa (a diferencia de
+    // cateqhub abajo) — computePortfolioLifecycleStage (portfolioLifecycle.js)
+    // no necesita "since fields" porque cada umbral se mide desde una sola fecha.
+    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   stockflow: {
     entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: ['start', 'growth', 'pro'],
+    plans: ['start', 'growth', 'pro', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
+    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   // Radar (HR/attendance): license lives on the Company entity. No trial or
   // payment-reference fields modeled yet; expiry is a plain date (license_expiry).
   radar: {
     entity: 'Company', statusField: 'status', planField: 'tier',
     statuses: { active: 'active', suspended: 'suspended' },
-    plans: ['starter', 'pro', 'enterprise'],
+    plans: ['starter', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'license_expiry', trialField: null, dateFormat: 'date', payment: null, dayConvention: 'preserve_day' },
+    // Radar no tiene un valor de solo-lectura en su schema (Company.jsonc:
+    // enum ["active","suspended"]) — readOnlyStatus null hasta agregarlo vía
+    // Base44 MCP. El cron sigue mandando el correo del día 8, solo no puede
+    // aplicar el estado (ver enforcementGap en license-lifecycle.js).
+    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
   },
   rumbo: {
     entity: 'TenantLicense', statusField: 'status', planField: 'plan',
     statuses: { active: 'active', suspended: 'suspended' }, // suspend auto-blocks write_access
-    plans: ['trial', 'starter', 'pro', 'enterprise'],
+    plans: ['trial', 'starter', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'current_period_end', trialField: 'trial_ends_at', dateFormat: 'date', payment: 'rumbo', dayConvention: 'preserve_day' },
+    // Mismo caso que Radar: TenantLicense.jsonc no tiene un valor de
+    // solo-lectura (enum ["active","expired","suspended","cancelled"]).
+    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
   },
   liuma: {
     entity: 'SchoolSubscription', statusField: 'subscription_status', planField: 'license_tier',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: ['start', 'growth', 'plus'],
+    plans: ['start', 'growth', 'plus', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_date', dateFormat: 'datetime', payment: 'full', dayConvention: 'first_of_month' },
+    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   puntos: {
     entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: ['starter', 'growth', 'pro', 'enterprise'],
+    plans: ['starter', 'growth', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day', activeExtra: { status: 'active' } },
     // puntos keeps an append-only LicenseEvent audit; mirror MC actions into it.
     audit: { entity: 'LicenseEvent', idField: 'business_id', eventType: {
       reactivate: 'reactivated', suspend: 'suspended', view_only: 'view_only', set_plan: 'plan_changed',
       confirm_payment: 'license_renewed',
     } },
+    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   cateqhub: {
     entity: 'Parish', statusField: 'license_status', planField: 'plan',
