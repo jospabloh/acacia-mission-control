@@ -93,3 +93,22 @@ test('trial_ended_downgraded_free: avisa que sigue en Gratis, no que se restring
   assert.match(out.html, /plan Gratis/)
   assert.doesNotMatch(out.html, /denegad|solo lectura|pausad/i)
 })
+
+test('license_read_only: explica que la app quedó en solo lectura, sin mencionar borrado', () => {
+  const out = renderMessage('license_read_only', { app: messagingFor('stockflow'), tenantName: 'Baristop' })
+  assert.match(out.subject, /solo lectura/i)
+  assert.match(out.html, /Baristop/)
+  assert.doesNotMatch(out.html, /borra|elimina/i)
+})
+
+test('license_blocked: explica que el acceso quedó bloqueado y cómo pedir sus datos', () => {
+  const out = renderMessage('license_blocked', { app: messagingFor('stockflow'), tenantName: 'Baristop' })
+  assert.match(out.subject, /bloque/i)
+  assert.match(out.html, /soporte/i) // canal para pedir exportación (no hay autoservicio en estos apps)
+})
+
+test('license_inactive_warning: tono de última oportunidad antes de perder los datos', () => {
+  const out = renderMessage('license_inactive_warning', { app: messagingFor('stockflow'), tenantName: 'Baristop' })
+  assert.match(out.subject, /última oportunidad|antes de perder/i)
+  assert.match(out.html, /Baristop/)
+})
