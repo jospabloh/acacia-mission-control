@@ -31,7 +31,7 @@ test('día 8 (acumulado): read_only, con el status del app si lo soporta', () =>
   assert.deepEqual(computePortfolioLifecycleStage(lic, CFG, NOW), { stage: 'read_only', targetStatus: 'view_only' })
 })
 
-test('día 8, app sin read-only en su schema (rumbo/radar): stage sigue siendo read_only, targetStatus null', () => {
+test('día 8, app sin read-only en su schema (enforcementGap genérico — ya no aplica a rumbo/radar desde 2026-08-03, ver licenseControl.test.js): stage sigue siendo read_only, targetStatus null', () => {
   const cfgSinReadOnly = { ...CFG, readOnlyStatus: null }
   const lic = { plan: 'pro', status: 'active', current_period_end: '2026-07-26T00:00:00Z' }
   assert.deepEqual(computePortfolioLifecycleStage(lic, cfgSinReadOnly, NOW), { stage: 'read_only', targetStatus: null })
