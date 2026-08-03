@@ -158,11 +158,21 @@ desplegado (Base44 MCP)**.
    - Día 15: `blocked` — aplica `suspended` en los 6 apps (todos lo tienen).
      Correo explica que puede pedir sus datos por soporte (no hay
      autoexportación en ninguno de estos 6 apps hoy, a diferencia de CateqHub).
-   - Día 30: `inactive` — bookkeeping interno de Mission Control únicamente
-     (no se escribe nada nuevo al app; sigue en `suspended`). Correo distinto,
-     tono de "última oportunidad antes de perder tus datos".
-   - Día 45: `deletion_eligible` — bookkeeping interno + alerta al owner en
-     Mission Control (badge en `Licenses.jsx`, igual que CateqHub). **Nunca
+   - Día 30: `inactive` — la ETAPA es bookkeeping interno de Mission Control
+     (elige el correo, distinto tono de "última oportunidad antes de perder
+     tus datos"; no es un estado nuevo distinto en el app, que sigue viendo
+     `suspended`). Pero la ESCRITURA sí se aplica: `targetStatus` es el mismo
+     `cfg.blockedStatus` que `blocked` usa, para garantizar que un tenant
+     observado por primera vez ya en día 30+ (cron recién desplegado, bridge
+     caído semanas, onboarding a mitad de ciclo) también quede bloqueado, en
+     vez de quedarse en su status previo para siempre por nunca haber pasado
+     por el escalón `blocked`. Para quien ya llegó a `suspended` en el día 15,
+     esto es un no-op (el cron ya solo escribe si `status` difiere del
+     target).
+   - Día 45: `deletion_eligible` — misma lógica que día 30: la etapa es
+     bookkeeping interno + alerta al owner en Mission Control (badge en
+     `Licenses.jsx`, igual que CateqHub), y la escritura reutiliza
+     `cfg.blockedStatus` con el mismo criterio idempotente de arriba. **Nunca
      borra nada solo.** El borrado real queda fuera de alcance de esta fase
      (requiere una acción de borrado por app, hoy no existe de forma genérica
      y segura para estos 6 apps — se diseña cuando se ataque esa fase).

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor, deriveMirror } from './licenseControl.js'
+import { buildLicenseChange, computeRenewalExpiry, billingFor, licenseControlFor, deriveMirror, plansFor } from './licenseControl.js'
 
 // Fixed clock so every assertion is deterministic.
 const NOW = new Date('2026-06-15T12:00:00Z')
@@ -172,4 +172,84 @@ test('deriveMirror: solo incluye campos presentes en el patch, con su valor nuev
   ])
   assert.deepEqual(deriveMirror(cfg, { name: 'Parroquia X' }), undefined)
   assert.deepEqual(deriveMirror({ mirror: undefined }, { plan: 'premium' }), undefined)
+})
+
+// ── lifecycle unificado (portafolio) + plan oculto 'founder' ─────────────────
+
+test('lifecycle unificado: flowfin/stockflow/liuma/puntos tienen read-only y bloqueo', () => {
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos']) {
+    const cfg = licenseControlFor(id)
+    assert.equal(cfg.lifecycle.graceDaysToReadOnly, 8)
+    assert.equal(cfg.lifecycle.graceDaysToBlocked, 15)
+    assert.equal(cfg.lifecycle.graceDaysToInactive, 30)
+    assert.equal(cfg.lifecycle.graceDaysToDeletionEligible, 45)
+    assert.equal(cfg.lifecycle.readOnlyStatus, cfg.statuses.view_only)
+    assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
+  }
+})
+
+test('lifecycle unificado: rumbo y radar NO tienen read-only en su schema (readOnlyStatus null)', () => {
+  for (const id of ['rumbo', 'radar']) {
+    const cfg = licenseControlFor(id)
+    assert.equal(cfg.lifecycle.readOnlyStatus, null)
+    assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
+  }
+})
+
+test('cateqhub conserva su propio lifecycle por-etapa (NO se toca en este plan)', () => {
+  const cfg = licenseControlFor('cateqhub')
+  assert.equal(cfg.lifecycle.graceDaysToReadOnly, 15) // sigue siendo el suyo, no 8
+  assert.ok(cfg.lifecycle.sinceFields) // forma CateqHub, distinta de la unificada
+})
+
+test("plan oculto 'founder' disponible en los 6 apps de licencia de asiento", () => {
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos', 'rumbo', 'radar']) {
+    assert.ok(plansFor(id).includes('founder'), `${id} debería listar founder`)
+  }
+  assert.ok(!plansFor('cateqhub').includes('founder')) // CateqHub no tiene licencia de asiento
+})
+
+test('lifecycle unificado: paidPlanValues excluye founder (y trial, donde el app lo tiene) de plans', () => {
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos', 'rumbo', 'radar']) {
+    const cfg = licenseControlFor(id)
+    assert.ok(Array.isArray(cfg.lifecycle.paidPlanValues) && cfg.lifecycle.paidPlanValues.length > 0, `${id} debería tener paidPlanValues`)
+    assert.ok(!cfg.lifecycle.paidPlanValues.includes('founder'), `${id}: paidPlanValues no debería incluir founder`)
+    // Todo valor en paidPlanValues debe ser un plan real del app.
+    for (const p of cfg.lifecycle.paidPlanValues) assert.ok(cfg.plans.includes(p), `${id}: '${p}' no está en plans`)
+  }
+})
+
+test("lifecycle unificado: rumbo excluye 'trial' de paidPlanValues (confirmado en producción: tenant trial 6 días vencido no debe entrar al ciclo)", () => {
+  const cfg = licenseControlFor('rumbo')
+  assert.deepEqual(cfg.lifecycle.paidPlanValues, ['starter', 'pro', 'enterprise'])
+  assert.ok(cfg.plans.includes('trial')) // rumbo sí tiene 'trial' como plan real...
+  assert.ok(!cfg.lifecycle.paidPlanValues.includes('trial')) // ...pero no es un plan pago vencible
+})
+
+// ── regresión: set_plan NO debe estampar una llave "undefined" en los 6 apps ──
+// que ganaron paidPlanValues (commit 9d8995c) pero no tienen periodEndField.
+// Solo cateqhub tiene periodEndField — el gate de arriba en buildLicenseChange
+// debe requerir AMBOS (periodEndField Y paidPlanValues.includes(plan)), no solo
+// el segundo, o patch[undefined] = ... se cuela como llave "undefined" literal.
+
+test('set_plan en los 6 apps sin periodEndField: patch tiene EXACTAMENTE una llave (planField), nunca "undefined"', () => {
+  const cases = [
+    ['flowfin', 'home'],
+    ['stockflow', 'start'],
+    ['liuma', 'start'],
+    ['puntos', 'starter'],
+    ['rumbo', 'starter'],
+    ['radar', 'starter'],
+  ]
+  for (const [id, plan] of cases) {
+    const cfg = licenseControlFor(id)
+    assert.equal(cfg.lifecycle.periodEndField, undefined, `${id} no debería tener periodEndField`)
+    assert.ok(cfg.lifecycle.paidPlanValues.includes(plan), `${id}: '${plan}' debería ser un paidPlanValue de prueba`)
+
+    const { patch, error } = buildLicenseChange(id, 'set_plan', { plan, now: NOW })
+    assert.equal(error, undefined, `${id} set_plan no debería fallar`)
+    assert.deepEqual(Object.keys(patch), [cfg.planField], `${id}: patch debería tener solo [${cfg.planField}]`)
+    assert.equal(patch.undefined, undefined, `${id}: patch NO debería tener una llave "undefined"`)
+    assert.equal('undefined' in patch, false, `${id}: patch NO debería tener la llave literal "undefined"`)
+  }
 })

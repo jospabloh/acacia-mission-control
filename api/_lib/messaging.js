@@ -241,6 +241,37 @@ ${ctx.body ? paras(ctx.body) : ''}
     }
   }
 
+  if (type === 'license_read_only') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}${app.name} está en modo solo lectura`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Tu licencia de <span class="hi">${esc(app.name)}</span> venció y no se ha renovado. Por ahora, <strong>agregar o editar quedó pausado</strong> — lo que ya registraste sigue visible sin cambios.</p>
+<p>Confirma tu pago cuando puedas para reactivar la app por completo. Cualquier duda, escríbenos a soporte.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'license_blocked') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}acceso bloqueado en ${app.name} — falta de pago prolongada`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Por falta de pago prolongada, el acceso a <span class="hi">${esc(app.name)}</span> quedó bloqueado por completo. Tus datos <strong>no se eliminan</strong> — quedan pausados hasta reactivar tu licencia.</p>
+<p>Si necesitas exportar tu información antes de reactivar, escríbenos a soporte y te la enviamos.</p>
+<p>Si confirmas tu pago, tu acceso se reactiva de inmediato.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
+  if (type === 'license_inactive_warning') {
+    return {
+      subject: `${ctx.tenantName ? ctx.tenantName + ', ' : ''}última oportunidad antes de perder tus datos en ${app.name}`,
+      html: wrap(app.name, `<p>${hello}</p>
+<p>Tu licencia de <span class="hi">${esc(app.name)}</span> sigue sin renovarse desde hace tiempo. Tu cuenta está a punto de pasar a inactiva — si esto continúa, tus datos serán elegibles para eliminación.</p>
+<p>Confirma tu pago o escríbenos a soporte para evitarlo — todavía estás a tiempo de recuperar el acceso sin perder nada.</p>
+<p>— Equipo <strong>ACACIA</strong></p>`),
+    }
+  }
+
   // campaign — operator writes subject + body
   return {
     subject: ctx.subject || `Novedades de ${app.name}`,

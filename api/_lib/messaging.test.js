@@ -93,3 +93,30 @@ test('trial_ended_downgraded_free: avisa que sigue en Gratis, no que se restring
   assert.match(out.html, /plan Gratis/)
   assert.doesNotMatch(out.html, /denegad|solo lectura|pausad/i)
 })
+
+test('license_read_only: explica que la app quedó en solo lectura, sin mencionar borrado', () => {
+  const out = renderMessage('license_read_only', { app: messagingFor('stockflow'), tenantName: 'Baristop' })
+  assert.match(out.subject, /solo lectura/i)
+  assert.match(out.html, /Baristop/)
+  assert.doesNotMatch(out.html, /borra|elimina/i)
+})
+
+test('license_blocked: explica que el acceso quedó bloqueado y cómo pedir sus datos', () => {
+  const out = renderMessage('license_blocked', { app: messagingFor('stockflow'), tenantName: 'Baristop' })
+  assert.match(out.subject, /bloque/i)
+  assert.match(out.html, /soporte/i) // canal para pedir exportación (no hay autoservicio en estos apps)
+  // constraint global: nunca insinuar borrado prematuro — aquí debe reafirmar
+  // explícitamente lo contrario, no bastar con la ausencia de la palabra.
+  assert.match(out.html, /no se eliminan/i)
+})
+
+test('license_inactive_warning: tono de última oportunidad antes de perder los datos', () => {
+  const out = renderMessage('license_inactive_warning', { app: messagingFor('stockflow'), tenantName: 'Baristop' })
+  assert.match(out.subject, /última oportunidad|antes de perder/i)
+  assert.match(out.html, /Baristop/)
+  // el riesgo de pérdida de datos debe quedar planteado como futuro/condicional
+  // ("serán elegibles para eliminación" si la situación continúa), nunca como
+  // algo que ya ocurrió o es inminente sin condición.
+  assert.match(out.html, /ser[áa]n elegibles para eliminaci[óo]n/i)
+  assert.doesNotMatch(out.html, /fueron eliminados|se eliminaron|ya se elimin[óo]|ya (fueron|han sido) eliminad/i)
+})
