@@ -36,14 +36,18 @@ const APPS = {
     // Acumulado desde current_period_end, NO por-etapa (a diferencia de
     // cateqhub abajo) — computePortfolioLifecycleStage (portfolioLifecycle.js)
     // no necesita "since fields" porque cada umbral se mide desde una sola fecha.
-    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+    // paidPlanValues excluye 'founder' (plan oculto, vitalicio — ver
+    // portfolioLifecycle.js) de los planes de pago reales de flowfin.
+    lifecycle: { paidPlanValues: ['home', 'family_plus', 'circle'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   stockflow: {
     entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['start', 'growth', 'pro', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
-    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+    // paidPlanValues excluye 'founder' (plan oculto, vitalicio) de los planes
+    // de pago reales de stockflow.
+    lifecycle: { paidPlanValues: ['start', 'growth', 'pro'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   // Radar (HR/attendance): license lives on the Company entity. No trial or
   // payment-reference fields modeled yet; expiry is a plain date (license_expiry).
@@ -56,7 +60,8 @@ const APPS = {
     // enum ["active","suspended"]) — readOnlyStatus null hasta agregarlo vía
     // Base44 MCP. El cron sigue mandando el correo del día 8, solo no puede
     // aplicar el estado (ver enforcementGap en license-lifecycle.js).
-    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
+    // paidPlanValues excluye 'founder' de los planes de pago reales de radar.
+    lifecycle: { paidPlanValues: ['starter', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
   },
   rumbo: {
     entity: 'TenantLicense', statusField: 'status', planField: 'plan',
@@ -65,14 +70,22 @@ const APPS = {
     billing: { expiryField: 'current_period_end', trialField: 'trial_ends_at', dateFormat: 'date', payment: 'rumbo', dayConvention: 'preserve_day' },
     // Mismo caso que Radar: TenantLicense.jsonc no tiene un valor de
     // solo-lectura (enum ["active","expired","suspended","cancelled"]).
-    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
+    // paidPlanValues excluye 'trial' (no es un plan pago vencido, es prueba
+    // activa) y 'founder' — confirmado contra producción: un tenant Rumbo en
+    // plan 'trial' 6 días vencido se estaba colando al ciclo de enforcement.
+    // TenantLicense.jsonc también tiene status 'cancelled' en su enum, pero
+    // cfg.statuses (arriba) no lo trackea todavía — fuera de alcance de este
+    // fix (ver CLAUDE.md / spec del ciclo de vida), se resuelve solo con el
+    // filtro de paidPlanValues por ahora.
+    lifecycle: { paidPlanValues: ['starter', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
   },
   liuma: {
     entity: 'SchoolSubscription', statusField: 'subscription_status', planField: 'license_tier',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['start', 'growth', 'plus', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_date', dateFormat: 'datetime', payment: 'full', dayConvention: 'first_of_month' },
-    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+    // paidPlanValues excluye 'founder' de los planes de pago reales de liuma.
+    lifecycle: { paidPlanValues: ['start', 'growth', 'plus'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   puntos: {
     entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
@@ -84,7 +97,8 @@ const APPS = {
       reactivate: 'reactivated', suspend: 'suspended', view_only: 'view_only', set_plan: 'plan_changed',
       confirm_payment: 'license_renewed',
     } },
-    lifecycle: { graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+    // paidPlanValues excluye 'founder' de los planes de pago reales de puntos.
+    lifecycle: { paidPlanValues: ['starter', 'growth', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   cateqhub: {
     entity: 'Parish', statusField: 'license_status', planField: 'plan',

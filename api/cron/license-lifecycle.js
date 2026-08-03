@@ -166,6 +166,16 @@ async function runStagedLifecycleForApp(app, cfg, week, now) {
   return row
 }
 
+// Filtra a solo licencias con plan en cfg.lifecycle.paidPlanValues — igual
+// criterio que la rama staged (arriba, `premium`), pero para el ciclo
+// unificado. Sin esto, un tenant en un plan no-pago (p.ej. 'trial') con
+// current_period_end vencido se cuela al enforcement — confirmado en
+// producción con un tenant Rumbo en plan 'trial' 6 días vencido. Pura y
+// exportada para poder testearla sin supabaseAdmin (ver license-lifecycle.test.js).
+export function filterPaidLicenses(lics, cfg) {
+  return (lics ?? []).filter((l) => cfg.lifecycle.paidPlanValues.includes(l.plan))
+}
+
 // Rama unificada (portafolio) — flowfin/stockflow/liuma/puntos/rumbo/radar.
 // Acumulado desde current_period_end (ya sincronizado, sin leer `raw`).
 // byId/msgCfg vienen resueltos del loop principal (código nuevo, sin
@@ -184,8 +194,10 @@ async function runUnifiedLifecycleForApp(app, cfg, byId, msgCfg, week, now, cont
     .from('licenses').select('external_id, plan, status, current_period_end').eq('app_id', app.id)
   if (lErr) { row.error = lErr.message; return row }
 
+  const paid = filterPaidLicenses(lics, cfg)
+
   let didTransition = false
-  for (const lic of (lics ?? [])) {
+  for (const lic of paid) {
     const result = computePortfolioLifecycleStage(lic, cfg.lifecycle, now)
     if (!result) continue
     const { stage, targetStatus } = result

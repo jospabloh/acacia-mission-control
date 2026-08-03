@@ -208,3 +208,20 @@ test("plan oculto 'founder' disponible en los 6 apps de licencia de asiento", ()
   }
   assert.ok(!plansFor('cateqhub').includes('founder')) // CateqHub no tiene licencia de asiento
 })
+
+test('lifecycle unificado: paidPlanValues excluye founder (y trial, donde el app lo tiene) de plans', () => {
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos', 'rumbo', 'radar']) {
+    const cfg = licenseControlFor(id)
+    assert.ok(Array.isArray(cfg.lifecycle.paidPlanValues) && cfg.lifecycle.paidPlanValues.length > 0, `${id} debería tener paidPlanValues`)
+    assert.ok(!cfg.lifecycle.paidPlanValues.includes('founder'), `${id}: paidPlanValues no debería incluir founder`)
+    // Todo valor en paidPlanValues debe ser un plan real del app.
+    for (const p of cfg.lifecycle.paidPlanValues) assert.ok(cfg.plans.includes(p), `${id}: '${p}' no está en plans`)
+  }
+})
+
+test("lifecycle unificado: rumbo excluye 'trial' de paidPlanValues (confirmado en producción: tenant trial 6 días vencido no debe entrar al ciclo)", () => {
+  const cfg = licenseControlFor('rumbo')
+  assert.deepEqual(cfg.lifecycle.paidPlanValues, ['starter', 'pro', 'enterprise'])
+  assert.ok(cfg.plans.includes('trial')) // rumbo sí tiene 'trial' como plan real...
+  assert.ok(!cfg.lifecycle.paidPlanValues.includes('trial')) // ...pero no es un plan pago vencible
+})
