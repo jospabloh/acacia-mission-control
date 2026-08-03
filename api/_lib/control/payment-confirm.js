@@ -16,6 +16,17 @@ export function assertConfirmable(report) {
   return { ok: true }
 }
 
+// Pure guard for the atomic "claim" update below: the update is scoped with
+// `.eq('id', reportId).is('confirmed_at', null)` so at most one concurrent
+// request can ever flip a given report from unconfirmed → confirmed. If the
+// returned row set is empty, someone else won the race (or the row vanished)
+// between our read and our write — treat it exactly like assertConfirmable's
+// already_confirmed case.
+export function evaluateClaim(claimedRows) {
+  if (!claimedRows || claimedRows.length === 0) return { ok: false, error: 'already_confirmed' }
+  return { ok: true }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
   if (!requireSupabase(res)) return
@@ -49,6 +60,24 @@ export default async function handler(req, res) {
   if (aErr) return res.status(500).json({ error: aErr.message })
   if (!app) return res.status(404).json({ error: 'app no encontrada' })
 
+  // Atomic claim — the real fix for the TOCTOU: two concurrent requests can
+  // both pass assertConfirmable's read-then-check above, but only one of
+  // them can win this conditional update (`confirmed_at IS NULL` enforced by
+  // Postgres, not by JS). Do this *before* touching the license at all, so a
+  // loser never calls callBridge in the first place. If callBridge/resync
+  // below throws, the catch block rolls this claim back so the report stays
+  // retryable — a report must never end up "confirmed" with no license write
+  // to show for it.
+  const { data: claimedRows, error: claimErr } = await supabaseAdmin
+    .from('payment_reports')
+    .update({ confirmed_by: member.email, confirmed_at: new Date().toISOString() })
+    .eq('id', reportId)
+    .is('confirmed_at', null)
+    .select()
+  if (claimErr) return res.status(500).json({ error: claimErr.message })
+  const claim = evaluateClaim(claimedRows)
+  if (!claim.ok) return res.status(409).json({ error: claim.error })
+
   try {
     const out = await callBridge(app, 'license.set', {
       entity: cfg.entity, id: report.external_id, patch: change.patch, log: change.log,
@@ -73,16 +102,19 @@ export default async function handler(req, res) {
       }
     } catch (e) { console.warn('[payment-confirm] resolución de destinatario falló:', e.message) }
 
-    await supabaseAdmin.from('payment_reports')
-      .update({ confirmed_by: member.email, confirmed_at: new Date().toISOString() })
-      .eq('id', reportId)
-
     await audit('control:payment-confirm', {
       actor: member.user_id, actor_email: member.email, target_app: report.app_id, target_id: report.external_id,
       payload: { reportId, amount: report.amount, newExpiry: change.newExpiry ?? null, emailed },
     })
     return res.status(200).json({ ok: true, applied: !!(out?.ok ?? out?.updated), newExpiry: change.newExpiry ?? null, emailed, resync })
   } catch (e) {
+    // The license write (or resync) failed — the claim above already
+    // stamped confirmed_by/confirmed_at, but nothing was actually applied.
+    // Roll it back so the report reads as pending again and a retry (or a
+    // concurrent request) isn't permanently locked out by our own claim.
+    await supabaseAdmin.from('payment_reports')
+      .update({ confirmed_by: null, confirmed_at: null })
+      .eq('id', reportId)
     return res.status(502).json({ error: e.message })
   }
 }
