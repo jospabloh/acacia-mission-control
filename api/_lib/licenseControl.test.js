@@ -176,22 +176,19 @@ test('deriveMirror: solo incluye campos presentes en el patch, con su valor nuev
 
 // ── lifecycle unificado (portafolio) + plan oculto 'founder' ─────────────────
 
-test('lifecycle unificado: flowfin/stockflow/liuma/puntos tienen read-only y bloqueo', () => {
-  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos']) {
+test('lifecycle unificado: los 6 apps de licencia de asiento tienen read-only y bloqueo', () => {
+  // Rumbo y Radar se sumaron el 2026-08-03 (PRs #88/#12): view_only agregado
+  // a su schema y desplegado al backend de Base44 (npx base44 entities push,
+  // confirmado por el owner) — antes de esto readOnlyStatus era null para
+  // ambos y el cron solo podía mandar el correo del día 8, no aplicar el
+  // estado (ver enforcementGap en license-lifecycle.js).
+  for (const id of ['flowfin', 'stockflow', 'liuma', 'puntos', 'rumbo', 'radar']) {
     const cfg = licenseControlFor(id)
     assert.equal(cfg.lifecycle.graceDaysToReadOnly, 8)
     assert.equal(cfg.lifecycle.graceDaysToBlocked, 15)
     assert.equal(cfg.lifecycle.graceDaysToInactive, 30)
     assert.equal(cfg.lifecycle.graceDaysToDeletionEligible, 45)
     assert.equal(cfg.lifecycle.readOnlyStatus, cfg.statuses.view_only)
-    assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
-  }
-})
-
-test('lifecycle unificado: rumbo y radar NO tienen read-only en su schema (readOnlyStatus null)', () => {
-  for (const id of ['rumbo', 'radar']) {
-    const cfg = licenseControlFor(id)
-    assert.equal(cfg.lifecycle.readOnlyStatus, null)
     assert.equal(cfg.lifecycle.blockedStatus, cfg.statuses.suspended)
   }
 })

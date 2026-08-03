@@ -53,23 +53,30 @@ const APPS = {
   // payment-reference fields modeled yet; expiry is a plain date (license_expiry).
   radar: {
     entity: 'Company', statusField: 'status', planField: 'tier',
-    statuses: { active: 'active', suspended: 'suspended' },
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
     plans: ['starter', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'license_expiry', trialField: null, dateFormat: 'date', payment: null, dayConvention: 'preserve_day' },
-    // Radar no tiene un valor de solo-lectura en su schema (Company.jsonc:
-    // enum ["active","suspended"]) — readOnlyStatus null hasta agregarlo vía
-    // Base44 MCP. El cron sigue mandando el correo del día 8, solo no puede
-    // aplicar el estado (ver enforcementGap en license-lifecycle.js).
+    // view_only agregado y desplegado al backend de Base44 el 2026-08-03
+    // (Company.jsonc enum: ["active","suspended","view_only"], PR #12,
+    // deploy confirmado por el owner vía npx base44 entities push). El cron
+    // ya puede aplicar el estado de solo-lectura del día 8, no solo mandar
+    // el correo (ver enforcementGap en license-lifecycle.js — deja de
+    // incrementarse para radar a partir de este cambio).
     // paidPlanValues excluye 'founder' de los planes de pago reales de radar.
-    lifecycle: { paidPlanValues: ['starter', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
+    lifecycle: { paidPlanValues: ['starter', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   rumbo: {
     entity: 'TenantLicense', statusField: 'status', planField: 'plan',
-    statuses: { active: 'active', suspended: 'suspended' }, // suspend auto-blocks write_access
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' }, // suspend auto-blocks write_access
     plans: ['trial', 'starter', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'current_period_end', trialField: 'trial_ends_at', dateFormat: 'date', payment: 'rumbo', dayConvention: 'preserve_day' },
-    // Mismo caso que Radar: TenantLicense.jsonc no tiene un valor de
-    // solo-lectura (enum ["active","expired","suspended","cancelled"]).
+    // view_only agregado y desplegado al backend de Base44 el 2026-08-03
+    // (TenantLicense.jsonc enum: ["active","expired","suspended","cancelled",
+    // "view_only"], PR #88, deploy confirmado por el owner vía
+    // npx base44 entities push). Mismo PR también restauró la rama
+    // data.members.email en rls.update que un commit de base44-builder[bot]
+    // había borrado sin review — ver CLAUDE.md de rumbo si hace falta el
+    // contexto de esa regresión.
     // paidPlanValues excluye 'trial' (no es un plan pago vencido, es prueba
     // activa) y 'founder' — confirmado contra producción: un tenant Rumbo en
     // plan 'trial' 6 días vencido se estaba colando al ciclo de enforcement.
@@ -77,7 +84,7 @@ const APPS = {
     // cfg.statuses (arriba) no lo trackea todavía — fuera de alcance de este
     // fix (ver CLAUDE.md / spec del ciclo de vida), se resuelve solo con el
     // filtro de paidPlanValues por ahora.
-    lifecycle: { paidPlanValues: ['starter', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: null, blockedStatus: 'suspended' },
+    lifecycle: { paidPlanValues: ['starter', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
   liuma: {
     entity: 'SchoolSubscription', statusField: 'subscription_status', planField: 'license_tier',
