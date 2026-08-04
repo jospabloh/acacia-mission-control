@@ -77,7 +77,8 @@ export function Revenue() {
 
       <div className="mt-6 rounded-xl border border-hair bg-paper-card overflow-hidden">
         <h3 className="px-5 pt-5 font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Movimientos recientes</h3>
-        <table className="mt-3 w-full text-sm">
+        <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
             <tr><th className="px-5 py-2">Fecha</th><th className="px-5 py-2">App</th><th className="px-5 py-2">Tipo</th><th className="px-5 py-2 text-right">Monto</th></tr>
           </thead>
@@ -95,6 +96,7 @@ export function Revenue() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

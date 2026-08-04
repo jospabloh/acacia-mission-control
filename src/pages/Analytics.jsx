@@ -235,7 +235,8 @@ export function Analytics() {
 
       <div className="mt-6 rounded-xl border border-hair bg-paper-card overflow-hidden">
         <h3 className="px-5 pt-5 font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Uso por app</h3>
-        <table className="mt-3 w-full text-sm">
+        <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
             <tr><th className="px-5 py-2">App</th><th className="px-5 py-2">Tenants</th><th className="px-5 py-2">Activas / Total</th><th className="px-5 py-2 w-1/3">Distribución</th></tr>
           </thead>
@@ -255,6 +256,7 @@ export function Analytics() {
             {data.byApp.length === 0 && <tr><td colSpan={4} className="px-5 py-4 text-ink-faint">Aún no hay datos sincronizados.</td></tr>}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">

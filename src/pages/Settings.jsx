@@ -111,6 +111,7 @@ export function Settings() {
         ) : members.length === 0 ? (
           <p className="px-4 py-4 text-sm text-ink-mute">Sin operadores.</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-hair text-left text-xs uppercase tracking-wide text-ink-mute">
               <tr>
@@ -159,6 +160,7 @@ export function Settings() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
       <p className="mt-3 text-xs text-ink-faint">
