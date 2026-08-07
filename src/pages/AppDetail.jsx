@@ -264,8 +264,16 @@ export function AppDetail() {
                   </span>
                 ))}
               </div>
-            ) : (
+            ) : operable ? (
               <p className="mt-3 text-sm text-ink-faint">Sin snapshot aún. Pulsa <span className="font-medium text-ink">Sincronizar ahora</span>.</p>
+            ) : (
+              // Sin puente no hay nada que sincronizar, así que mandar a pulsar
+              // un botón que esta app no tiene sólo confunde. Su actividad se
+              // mide por otro lado: visitas y visitantes en Analítica.
+              <p className="mt-3 text-sm text-ink-faint">
+                Esta app no reporta uso: no tiene backend que consultar. Su actividad se mide con visitas y visitantes en{' '}
+                <Link to="/analytics" className="font-medium text-ink underline decoration-hair underline-offset-2 hover:decoration-brand">Analítica</Link>.
+              </p>
             )}
           </div>
 
