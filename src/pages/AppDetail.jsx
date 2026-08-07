@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
-import { runSync, emailStatus } from '../lib/control.js'
+import { runSync, emailStatus, webKpis } from '../lib/control.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { SessionsPanel } from '../components/SessionsPanel.jsx'
 import { Icon } from '../components/icons.jsx'
@@ -33,6 +33,58 @@ function buildVencimientos(licenses, tenantById, now) {
     if (dT !== null && dT >= 0 && dT <= 45) out.push({ ...base, type: 'fin de prueba', in_days: dT, date: l.trial_ends_at })
   }
   return out.sort((a, b) => a.in_days - b.in_days)
+}
+
+// Las rutas de una app son las que cuelgan de su prefijo de URL: la misma
+// atribución que usa api/web-kpis.js para repartir los pageviews.
+function pathsForApp(app, kpisByPath) {
+  let prefix
+  try { prefix = new URL(app.url).pathname.replace(/\/+$/, '') } catch { return [] }
+  return Object.entries(kpisByPath ?? {})
+    .filter(([path]) => (prefix === '' ? true : path === prefix || path.startsWith(prefix + '/')))
+    .map(([path, k]) => ({ path, ...k }))
+    .sort((a, b) => b.visits30 - a.visits30)
+}
+
+// Tabla de rutas para apps sin backend: es todo lo que se sabe de ellas, y la
+// ruta virtual que dispara una herramienta al terminar su trabajo (por ejemplo
+// /exportado) aparece aquí como una fila más — conversión, no sólo tráfico.
+function WebPaths({ rows, appPath }) {
+  return (
+    <div className="mt-6 rounded-xl border border-hair bg-paper-card p-5">
+      <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Rutas</h3>
+      <p className="mt-1 text-xs text-ink-faint">Últimos 30 días, por primera parte anónima. Sin cookies ni datos personales.</p>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-faint">Aún no hay visitas registradas.</p>
+      ) : (
+        <table className="mt-4 w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
+              <th className="pb-2 font-medium">Ruta</th>
+              <th className="pb-2 text-right font-medium">Visitas</th>
+              <th className="pb-2 text-right font-medium">Visitantes</th>
+              <th className="pb-2 text-right font-medium">7 días</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.path} className="border-t border-hair">
+                <td className="py-2 pr-3">
+                  <span className="font-mono text-xs text-ink">{r.path}</span>
+                  {r.path !== appPath && (
+                    <span className="ml-2 rounded-md bg-paper-subtle px-1.5 py-0.5 text-[11px] text-ink-mute">{r.path.slice(appPath.length + 1)}</span>
+                  )}
+                </td>
+                <td className="py-2 text-right font-display font-semibold text-ink">{r.visits30.toLocaleString('es-MX')}</td>
+                <td className="py-2 text-right text-ink-mute">{r.visitors30.toLocaleString('es-MX')}</td>
+                <td className="py-2 text-right text-ink-mute">{r.visits7.toLocaleString('es-MX')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
 }
 
 function Bars({ title, rows, total, colorFor }) {
@@ -103,6 +155,7 @@ export function AppDetail() {
   const [flash, setFlash] = useState(null) // { ok, msg }
   const [openRow, setOpenRow] = useState(null) // expanded vencimiento index
   const [followups, setFollowups] = useState({}) // tenantExt -> { loading, supported, records, error }
+  const [web, setWeb] = useState(null) // { byApp, kpis } de /api/web-kpis
 
   const load = useCallback(async () => {
     const apps = await fetchApps()
@@ -129,6 +182,13 @@ export function AppDetail() {
       const day = rows[0].day
       setUsage({ day, metrics: rows.filter((r) => r.day === day).map((r) => ({ metric: r.metric, value: r.value })) })
     } else setUsage({ day: null, metrics: [] })
+
+    // Las apps sin puente no tienen licencias ni snapshots que mostrar; lo que
+    // sí tienen es tráfico. Se pide sólo para ellas para no gravar la ficha de
+    // una app de paga con una llamada que no va a usar.
+    if (a.backend !== 'base44') {
+      try { setWeb(await webKpis()) } catch { setWeb({ byApp: {}, kpis: {} }) }
+    }
   }, [appId])
 
   useEffect(() => { load().catch((e) => setError(e.message)) }, [load])
@@ -172,6 +232,9 @@ export function AppDetail() {
   const operable = app.backend === 'base44'
   const emailCap = !!app.config?.email_log
   const sessionCap = !!app.config?.session_entity
+  const webPaths = web ? pathsForApp(app, web.kpis) : []
+  let appPath = ''
+  try { appPath = new URL(app.url).pathname.replace(/\/+$/, '') } catch { appPath = '' }
 
   return (
     <div>
@@ -193,15 +256,15 @@ export function AppDetail() {
 
       {error && <p className="mb-4 text-sm text-red-600">No se pudo leer: {error}</p>}
 
-      {/* Control */}
+      {/* Control — sólo donde hay algo que controlar. En una app de catálogo era
+          una tarjeta entera dedicada a decir que ahí no hay nada. */}
+      {operable && (
       <div className="rounded-xl border border-hair bg-paper-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Control</h3>
             <p className="mt-1 text-xs text-ink-faint">
-              {operable
-                ? <>Sincroniza este app vía su puente <code className="font-mono text-ink">acaciaControl</code> (HMAC firmado).{lastSync && <> · última sinc.: {new Date(lastSync).toLocaleString('es-MX')}</>}</>
-                : 'Esta app no tiene puente operable (solo catálogo).'}
+              Sincroniza este app vía su puente <code className="font-mono text-ink">acaciaControl</code> (HMAC firmado).{lastSync && <> · última sinc.: {new Date(lastSync).toLocaleString('es-MX')}</>}
             </p>
           </div>
           {operable && (
@@ -231,12 +294,32 @@ export function AppDetail() {
           <p className={`mt-3 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>
         )}
       </div>
+      )}
 
       {/* Sesiones activas (live, por usuario, con desconexión forzada) */}
       <SessionsPanel appId={appId} supported={sessionCap} />
 
+      {/* Una app de catálogo no tiene tenants, licencias ni asientos: esos
+          cuatro contadores serían siempre cero y la ficha no diría nada. Lo que
+          sí tiene es tráfico, así que eso es lo que se mide. */}
+      {!operable && (
+        web === null ? (
+          <p className="mt-6 text-sm text-ink-mute">Cargando métricas…</p>
+        ) : (
+          <>
+            <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard label="Visitas 30d" value={(web.byApp?.[appId]?.visits30 ?? 0).toLocaleString('es-MX')} accent />
+              <StatCard label="Visitantes 30d" value={(web.byApp?.[appId]?.visitors30 ?? 0).toLocaleString('es-MX')} hint="únicos, hash diario" />
+              <StatCard label="Visitas 7d" value={(web.byApp?.[appId]?.visits7 ?? 0).toLocaleString('es-MX')} />
+              <StatCard label="Rutas" value={webPaths.length} hint="con actividad" to="/analytics" />
+            </div>
+            <WebPaths rows={webPaths} appPath={appPath} />
+          </>
+        )
+      )}
+
       {/* Analytics */}
-      {t && (
+      {operable && t && (
         <>
           <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Tenants" value={t.tenants} />
@@ -264,16 +347,10 @@ export function AppDetail() {
                   </span>
                 ))}
               </div>
-            ) : operable ? (
-              <p className="mt-3 text-sm text-ink-faint">Sin snapshot aún. Pulsa <span className="font-medium text-ink">Sincronizar ahora</span>.</p>
             ) : (
-              // Sin puente no hay nada que sincronizar, así que mandar a pulsar
-              // un botón que esta app no tiene sólo confunde. Su actividad se
-              // mide por otro lado: visitas y visitantes en Analítica.
-              <p className="mt-3 text-sm text-ink-faint">
-                Esta app no reporta uso: no tiene backend que consultar. Su actividad se mide con visitas y visitantes en{' '}
-                <Link to="/analytics" className="font-medium text-ink underline decoration-hair underline-offset-2 hover:decoration-brand">Analítica</Link>.
-              </p>
+              // Este bloque ya sólo existe para apps con puente, así que el
+              // botón al que manda siempre está en pantalla.
+              <p className="mt-3 text-sm text-ink-faint">Sin snapshot aún. Pulsa <span className="font-medium text-ink">Sincronizar ahora</span>.</p>
             )}
           </div>
 
