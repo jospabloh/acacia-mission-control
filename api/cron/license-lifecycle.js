@@ -1,6 +1,9 @@
 // Cron diario: ciclo de vida de licencia unificado (portafolio: flowfin/
-// stockflow/liuma/puntos/rumbo/radar/cateqhub) — acumulado desde
+// stockflow/ctrlhq/liuma/puntos/rumbo/radar/cateqhub) — acumulado desde
 // current_period_end/premium_period_end_at, ver portfolioLifecycle.js.
+// La lista de apps se resuelve dinámicamente (apps con backend='base44' que
+// tengan entrada en licenseControl.js APPS) — este comentario es solo
+// documentación, no una allowlist codificada.
 // Nunca borra nada — deletion_eligible solo se refleja para revisión humana
 // en Licencias (fuera de este plan).
 //
