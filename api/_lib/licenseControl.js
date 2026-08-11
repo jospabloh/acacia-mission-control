@@ -49,16 +49,6 @@ const APPS = {
     // de pago reales de stockflow.
     lifecycle: { paidPlanValues: ['start', 'growth', 'pro'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
-  // CtrlHQ: modeled on stockflow on purpose (jospabloh/CtrlHQ was built by
-  // lifting stockflow's/flowfin's production-tested patterns) — identical
-  // entity/field names, no 'founder' plan yet.
-  ctrlhq: {
-    entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
-    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: ['start', 'growth', 'pro'],
-    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
-    lifecycle: { paidPlanValues: ['start', 'growth', 'pro'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
-  },
   // Radar (HR/attendance): license lives on the Company entity. No trial or
   // payment-reference fields modeled yet; expiry is a plain date (license_expiry).
   radar: {

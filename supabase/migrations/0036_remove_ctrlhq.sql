@@ -1,0 +1,19 @@
+-- ============================================================================
+-- CtrlHQ — remove from the portfolio registry.
+--
+-- The client passed on it; jospabloh/CtrlHQ (repo and Base44 app) has been
+-- deleted and no longer exists. Deleting the 'ctrlhq' row cascades (per the
+-- 0001_init.sql FKs) to its tenant/license/app_health rows in the bodega —
+-- there were no tickets, revenue_events or usage_daily rows to lose. This
+-- mirrors 0023_rename_catequesisqr_to_cateqhub.sql in touching the apps row
+-- directly rather than leaving an orphaned/status-flagged entry: unlike a
+-- rename, there is no successor id for other rows to be repointed to.
+--
+-- Companion code changes (same PR): api/_lib/licenseControl.js,
+-- api/_lib/messaging.js and src/pages/Licenses.jsx drop their 'ctrlhq'
+-- entries so the license-lifecycle cron and the Licencias page stop
+-- referencing an app id that no longer exists in the registry.
+--
+-- Idempotent: re-running finds nothing to delete.
+-- ============================================================================
+delete from public.apps where id = 'ctrlhq';
