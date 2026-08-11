@@ -15,14 +15,6 @@ export const APP_MSG = {
     recipient: { related: { entity: 'User', keyField: 'business_id', keyFromRecord: 'id', emailField: 'email', roleField: 'role', roles: ['owner', 'admin'] }, nameField: 'name' },
     log: { entity: 'EmailNotification', idField: 'business_id' },
   },
-  ctrlhq: {
-    name: 'CtrlHQ', entity: 'Business', value: 'tu operación y tus finanzas bajo control',
-    recipient: { related: { entity: 'User', keyField: 'business_id', keyFromRecord: 'id', emailField: 'email', roleField: 'role', roles: ['admin'] }, nameField: 'name' },
-    // No `log` — CtrlHQ has no EmailNotification-equivalent entity yet (unlike
-    // stockflow/flowfin). Reminder de-duplication still works (Mission Control's
-    // own license_lifecycle_reminders table is what actually prevents double
-    // sends); this only means the send isn't ALSO logged inside CtrlHQ itself.
-  },
   radar: {
     name: 'Radar', entity: 'Company', value: 'la asistencia de tu equipo bajo control',
     recipient: { related: { entity: 'User', keyField: 'company_id', keyFromRecord: 'id', emailField: 'email', roleField: 'app_role', roles: ['company_admin'] }, nameField: 'name' },
