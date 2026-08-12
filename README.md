@@ -39,6 +39,18 @@ npm run onboard:base44 -- ../puntos --app-id 696e7fdd7889892fe40868b7 \
 Drop `--dry` (with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set) to upsert
 the registry row.
 
+## Auditing
+
+Run `/mission-control-audit` in Claude Code for a regression, data-integrity,
+security, and release-readiness sweep (routes, RLS/role gates, crons/webhooks,
+build/lint/test). Safe/mechanical issues (lint, build, broken routes/links, obvious
+copy/config mistakes) get fixed, committed, pushed to a `chore/audit-mc-<date>`
+branch, and opened as a draft PR — that push is a real Vercel preview deploy;
+production ships once a human merges. Anything touching auth, RLS, payments,
+migrations, crons/webhooks, or Write Control / the Settings danger zone is only
+ever flagged for a human, never auto-fixed. See
+[`.claude/commands/mission-control-audit.md`](./.claude/commands/mission-control-audit.md).
+
 ## Layout
 
 See [`CLAUDE.md`](./CLAUDE.md) for architecture, the RLS model, and conventions.
