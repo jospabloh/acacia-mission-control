@@ -32,10 +32,11 @@ export function usePortfolioData() {
       for (const r of t.data ?? []) bump(r.app_id).tenants++
       for (const r of l.data ?? []) { const x = bump(r.app_id); x.licenses++; if (r.status === 'active') x.active++ }
       setStats(s)
-    })
+    }).catch((e) => setError(e.message))
 
     supabase.from('app_sessions').select('app_id, last_active_at, revoked_at')
       .then(({ data }) => setSessByApp(aggregateByApp(data ?? [], Date.now())))
+      .catch((e) => setError(e.message))
 
     webKpis().then((r) => { setKpis(r.kpis ?? {}); setByApp(r.byApp ?? {}) }).catch(() => { setKpis({}); setByApp({}) })
   }, [])
