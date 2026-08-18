@@ -297,3 +297,35 @@ aplican a cualquiera de los 6 apps de licencia de asiento.
 - Auditar las automatizaciones nativas de FlowFin/LIUMA/Puntos+/Rumbo/Radar —
   se deja como tarea de investigación separada (no bloquea este plan, pero
   bloquea que el problema quede resuelto de verdad en esos apps).
+
+## Seguimiento (2026-08-18) — auditoría de automatizaciones nativas completada
+
+La auditoría pendiente arriba se hizo (8 apps del portafolio, contra
+`jospabloh/acacia-app-standard`). Dos hallazgos relevantes para este cron:
+
+- **Puntos+** tenía `checkTrialExpiration`, un cron nativo que duplicaba este
+  ciclo pero sobre un reloj de trial paralelo y desconectado
+  (`LoyaltyAccount.subscription_status`/`trial_end_date` del dueño del
+  negocio, no `Business.billing_status`). Ya se retiró — ver
+  `jospabloh/puntos` CLAUDE.md, sección "License lifecycle is owned by
+  Mission Control (fixed 2026-08-18)".
+- **StockFlow** tiene `processTrialReactivationEmails`, un cron nativo que
+  manda un correo de reenganche a usuarios de negocios en trial que llevan
+  >24h inactivos. A diferencia del caso de Puntos+, **no es una duplicación**
+  — lee `Business.billing_status` (el campo correcto) pero nunca lo escribe,
+  y no hace ninguna transición de estado. Es un tipo de recordatorio que este
+  cron unificado **no cubre hoy**: `computePortfolioLifecycleStage` solo
+  actúa *después* de que vence el período (`current_period_end` +
+  `graceDaysTo*`), nunca durante un trial activo por inactividad del usuario.
+  Se dejó documentado como excepción intencional en el CLAUDE.md de
+  StockFlow en vez de retirarlo — borrarlo sin más habría quitado una función
+  real sin equivalente centralizado.
+
+**Propuesta a futuro (no implementada, fuera de alcance de esta fase):** si
+se quiere este mismo nudge para el resto del portafolio, agregar una etapa
+nueva a `computePortfolioLifecycleStage` — algo como `stage: 'trial_inactive'`
+— que dispare *dentro* de la ventana de trial (antes de
+`graceDaysToReadOnly`) cuando el usuario lleve N horas sin actividad
+(requiere que cada app exponga o sincronice un `last_active_at` a la bodega,
+que hoy no todas tienen). Candidato natural para la próxima vez que se
+retome este spec, no algo que deba improvisarse dentro del cron existente.
