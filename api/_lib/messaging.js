@@ -31,6 +31,10 @@ export const APP_MSG = {
     name: 'Puntos+', entity: 'Business', value: 'tu programa de lealtad activo',
     recipient: { fields: ['contact_email', 'owner_email'], nameField: 'name' },
   },
+  ctrlhq: {
+    name: 'CtrlHQ', entity: 'Business', value: 'tus ingresos, egresos y nómina en un solo lugar',
+    recipient: { related: { entity: 'User', keyField: 'business_id', keyFromRecord: 'id', emailField: 'email', roleField: 'role', roles: ['business_admin'] }, nameField: 'name' },
+  },
   cateqhub: {
     name: 'CateqHub', entity: 'Parish', value: 'la asistencia y el catecismo de tu parroquia al día',
     recipient: { related: { entity: 'User', keyField: 'parish_id', keyFromRecord: 'id', emailField: 'email', roleField: 'parish_role', roles: ['admin'] }, nameField: 'name' },

@@ -107,6 +107,20 @@ const APPS = {
     // paidPlanValues excluye 'founder' de los planes de pago reales de puntos.
     lifecycle: { paidPlanValues: ['starter', 'growth', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
+  // CtrlHQ (jospabloh/ctrlhq) — re-registered 2026-08-19, structurally the
+  // same shape as stockflow/puntos (tenant = Business, billing_status on
+  // that same entity). This is a NEW app reusing the 'ctrlhq' id after the
+  // original multi-tenant CtrlHQ was deregistered (see 0036_remove_ctrlhq.sql
+  // — "the client passed on it"); the schema here is CtrlHQ's own, not a
+  // revival of the deleted one. Single paid tier today ('pro') — no founder
+  // plan modeled yet, add one if the platform owner grants it.
+  ctrlhq: {
+    entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
+    plans: ['pro'],
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
+    lifecycle: { paidPlanValues: ['pro'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+  },
   cateqhub: {
     entity: 'Parish', statusField: 'license_status', planField: 'plan',
     statuses: { active: 'active', suspended: 'access_denied', view_only: 'read_only' },
