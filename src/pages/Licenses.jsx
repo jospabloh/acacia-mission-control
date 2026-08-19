@@ -40,10 +40,11 @@ const PLANS = {
   liuma: ['start', 'growth', 'plus'],
   puntos: ['starter', 'growth', 'pro', 'enterprise'],
   cateqhub: ['free', 'premium'],
+  ctrlhq: ['pro'],
 }
-const HAS_VIEW_ONLY = new Set(['flowfin', 'stockflow', 'liuma', 'puntos', 'cateqhub']) // rumbo has no view_only
+const HAS_VIEW_ONLY = new Set(['flowfin', 'stockflow', 'liuma', 'puntos', 'cateqhub', 'ctrlhq']) // rumbo has no view_only
 // Apps that support the renewal/payment-confirmation flow.
-const HAS_BILLING = new Set(['flowfin', 'stockflow', 'rumbo', 'liuma', 'puntos'])
+const HAS_BILLING = new Set(['flowfin', 'stockflow', 'rumbo', 'liuma', 'puntos', 'ctrlhq'])
 // Per-app expiry-day convention (mirror of api/_lib/licenseControl billing.dayConvention).
 const FIRST_OF_MONTH = new Set(['flowfin', 'liuma']) // align to the 1st (Mercado Pago bills on the 1st)
 
