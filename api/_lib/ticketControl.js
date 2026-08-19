@@ -93,6 +93,22 @@ const APPS = {
       nameField: null, tsField: 'created_date',
     },
   },
+  // CtrlHQ: simpler 2-state model (submitted/resolved, no in_progress/closed
+  // stage and no resolved_at/closed_at timestamps yet) — resolvedField/
+  // closedField are null, which the bridge treats as "don't stamp a date."
+  ctrlhq: {
+    entity: 'SupportTicket', tenantField: 'business_id',
+    subjectField: 'subject', statusField: 'status', priorityField: null,
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['submitted', 'resolved'],
+    openStatus: 'submitted', inProgressStatus: 'submitted',
+    resolvedField: null, closedField: null,
+    thread: {
+      mode: 'message', messageEntity: 'SupportTicketMessage', fkField: 'ticket_id',
+      bodyField: 'body', roleField: 'author_role', staffRole: 'acacia_staff', customerRole: 'tenant',
+      nameField: 'author_name', tsField: 'created_date', rich: false,
+    },
+  },
   rumbo: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
     subjectField: 'subject', statusField: 'status', priorityField: 'priority',

@@ -5,9 +5,27 @@ import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketApps } fro
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
 
-// ── all 6 apps now persist tickets ───────────────────────────────────────────
+// ── all 7 apps now persist tickets ───────────────────────────────────────────
 test('all portfolio apps have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['cateqhub', 'flowfin', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+  assert.deepEqual(ticketApps().sort(), ['cateqhub', 'ctrlhq', 'flowfin', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+})
+
+// ── ctrlhq reply: simple 2-state model (no rich counters, no separate
+// in_progress status) ────────────────────────────────────────────────────────
+test('ctrlhq reply creates an acacia_staff message, status stays submitted', () => {
+  const raw = { id: 'ck1', business_id: 'biz1', status: 'submitted' }
+  const out = buildTicketReply('ctrlhq', { ticketRaw: raw, body: 'hola', actorEmail: 'op@acacia.mx', now: NOW })
+  assert.equal(out.messageEntity, 'SupportTicketMessage')
+  assert.equal(out.message.ticket_id, 'ck1')
+  assert.equal(out.message.business_id, 'biz1')
+  assert.equal(out.message.author_role, 'acacia_staff')
+  assert.equal(out.message.body, 'hola')
+  assert.equal(out.patch.status, 'submitted') // openStatus === inProgressStatus for ctrlhq
+})
+
+test('ctrlhq status resolved does not stamp a timestamp field (none modeled yet)', () => {
+  const out = buildTicketStatus('ctrlhq', { ticketRaw: { id: 'ck1', status: 'submitted' }, status: 'resolved', now: NOW })
+  assert.deepEqual(out.patch, { status: 'resolved' })
 })
 
 // ── stockflow / flowfin mirror the puntos rich model with a different tenant FK ─
