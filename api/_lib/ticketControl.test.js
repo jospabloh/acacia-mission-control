@@ -5,9 +5,28 @@ import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketApps } fro
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
 
-// ── all 7 apps now persist tickets ───────────────────────────────────────────
+// ── every app that persists tickets ──────────────────────────────────────────
 test('all portfolio apps have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['cateqhub', 'ctrlhq', 'flowfin', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+  assert.deepEqual(ticketApps().sort(), ['cateqhub', 'ctrlhq', 'flowfin', 'kitchops', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+})
+
+// ── kitchops: four states with a real resolved_at, unlike ctrlhq's two ───────
+test('kitchops reply escala submitted → in_progress y estampa el hilo', () => {
+  const raw = { id: 'kt1', business_id: 'biz9', status: 'submitted' }
+  const out = buildTicketReply('kitchops', { ticketRaw: raw, body: 'ya lo vimos', actorEmail: 'op@acacia.mx', now: NOW })
+  assert.equal(out.messageEntity, 'SupportTicketMessage')
+  assert.equal(out.message.ticket_id, 'kt1')
+  assert.equal(out.message.business_id, 'biz9')
+  // 'owner' (not ctrlhq's 'acacia_staff') — KitchOps' SupportTicketMessage
+  // enum is owner|tenant, and the field is admin-write-locked on its side.
+  assert.equal(out.message.author_role, 'owner')
+  assert.equal(out.patch.status, 'in_progress')
+})
+
+test('kitchops resolver estampa resolved_at', () => {
+  const out = buildTicketStatus('kitchops', { ticketRaw: { id: 'kt1' }, status: 'resolved', now: NOW })
+  assert.equal(out.patch.status, 'resolved')
+  assert.equal(out.patch.resolved_at, NOW_ISO)
 })
 
 // ── ctrlhq reply: simple 2-state model (no rich counters, no separate

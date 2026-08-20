@@ -121,6 +121,19 @@ const APPS = {
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
     lifecycle: { paidPlanValues: ['pro'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
+  // KitchOps (jospabloh/kitchops) — registered 2026-08-20. Same shape as
+  // stockflow (tenant = Business, billing_status/license_plan on that same
+  // entity, three tiers start/growth/pro). KitchOps ships NO native lifecycle
+  // cron on purpose — its CLAUDE.md records billing_status as written only
+  // from here, so this entry is the sole thing that moves a restaurant between
+  // trial → active → view_only → suspended.
+  kitchops: {
+    entity: 'Business', statusField: 'billing_status', planField: 'license_plan',
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
+    plans: ['start', 'growth', 'pro'],
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
+    lifecycle: { paidPlanValues: ['start', 'growth', 'pro'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+  },
   cateqhub: {
     entity: 'Parish', statusField: 'license_status', planField: 'plan',
     statuses: { active: 'active', suspended: 'access_denied', view_only: 'read_only' },
