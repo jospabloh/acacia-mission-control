@@ -109,6 +109,23 @@ const APPS = {
       nameField: 'author_name', tsField: 'created_date', rich: false,
     },
   },
+  // KitchOps: four-state model with a real resolved_at, and a `category`
+  // ('soporte' | 'mejora' | 'facturacion' | 'cuenta') the tenant picks — this
+  // bridge does not read it, but it is why KitchOps has no separate
+  // "solicitud de mejora" entity to bridge in addition to this one.
+  kitchops: {
+    entity: 'SupportTicket', tenantField: 'business_id',
+    subjectField: 'subject', statusField: 'status', priorityField: 'priority',
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['submitted', 'in_progress', 'waiting_customer', 'resolved'],
+    openStatus: 'submitted', inProgressStatus: 'in_progress',
+    resolvedField: 'resolved_at', closedField: null,
+    thread: {
+      mode: 'message', messageEntity: 'SupportTicketMessage', fkField: 'ticket_id',
+      bodyField: 'body', roleField: 'author_role', staffRole: 'owner', customerRole: 'tenant',
+      nameField: 'author_name', tsField: 'created_date', rich: false,
+    },
+  },
   rumbo: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
     subjectField: 'subject', statusField: 'status', priorityField: 'priority',
