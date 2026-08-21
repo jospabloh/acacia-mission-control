@@ -16,7 +16,10 @@ export default async function handler(req, res) {
   const member = await requireMember(req, res, 'admin')
   if (!member) return
 
-  const { appId, licenseExternalId, op, plan, periodMonths, paymentReference, sendEmail, addonKey, addonValue } = req.body ?? {}
+  const {
+    appId, licenseExternalId, op, plan, periodMonths, paymentReference, sendEmail,
+    addonKey, addonValue, expiryDate, trialEndsAt, alsoActivate, reason,
+  } = req.body ?? {}
   if (!appId || !licenseExternalId || !op) return res.status(400).json({ error: 'falta appId/licenseExternalId/op' })
   if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
 
@@ -34,7 +37,10 @@ export default async function handler(req, res) {
     currentExpiry = lic?.current_period_end ?? null
   }
 
-  const change = buildLicenseChange(appId, op, { plan, actorEmail: member.email, currentExpiry, periodMonths, paymentReference, addonKey, addonValue })
+  const change = buildLicenseChange(appId, op, {
+    plan, actorEmail: member.email, currentExpiry, periodMonths, paymentReference,
+    addonKey, addonValue, expiryDate, trialEndsAt, alsoActivate,
+  })
   if (change.error) return res.status(400).json({ error: change.error })
   if (change.log) change.log.row[cfg.audit.idField] = licenseExternalId // fill the audit record id
 
@@ -57,6 +63,25 @@ export default async function handler(req, res) {
     // Reflect the change in the bodega right away (best-effort).
     let resync = null
     try { resync = await syncLicensesForApp(app) } catch (e) { resync = { error: e.message } }
+
+    // Una baja también saca el renglón del panel. Va DESPUÉS del re-sync a
+    // propósito: el upsert de syncLicenses no toca `archived_at`, pero correrlo
+    // primero deja el estado ya actualizado y el archivado encima, en ese orden,
+    // sin depender de cómo quede el upsert. Si esto falla, la licencia ya quedó
+    // cancelada en la app (que es lo que corta el acceso) y el renglón se puede
+    // archivar de nuevo desde el panel — nunca se revierte el write.
+    let archived = null
+    if (op === 'cancel') {
+      const { error: aErr } = await supabaseAdmin.from('licenses')
+        .update({
+          archived_at: new Date().toISOString(),
+          archived_by: member.email ?? null,
+          archive_reason: reason ? String(reason).slice(0, 500) : null,
+        })
+        .eq('app_id', appId).eq('external_id', licenseExternalId)
+      archived = !aErr
+      if (aErr) console.warn('[license-action] baja aplicada en la app pero no se archivó:', aErr.message)
+    }
 
     // Correo de agradecimiento al admin de la tienda tras confirmar el pago.
     // Best-effort: si falla, el pago ya quedó aplicado; nunca revierte el write.
@@ -86,9 +111,9 @@ export default async function handler(req, res) {
 
     await audit('control:license-action', {
       actor: member.user_id, actor_email: member.email, target_app: appId, target_id: licenseExternalId,
-      payload: { op, plan: plan ?? null, label: OP_LABEL[op] ?? op, patch: change.patch, newExpiry: change.newExpiry ?? null, emailed },
+      payload: { op, plan: plan ?? null, label: OP_LABEL[op] ?? op, patch: change.patch, newExpiry: change.newExpiry ?? null, emailed, archived, reason: reason ?? null },
     })
-    return res.status(200).json({ ok: true, op, applied: !!(out?.ok ?? out?.updated), newExpiry: change.newExpiry ?? null, emailed, resync })
+    return res.status(200).json({ ok: true, op, applied: !!(out?.ok ?? out?.updated), newExpiry: change.newExpiry ?? null, emailed, archived, resync })
   } catch (e) {
     return res.status(502).json({ error: e.message })
   }
