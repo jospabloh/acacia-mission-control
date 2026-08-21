@@ -34,7 +34,7 @@ function AppCard({ app, stat, sess }) {
               <>
                 <span className="text-ink"><span className="font-display font-semibold">{sess.open}</span> <span className="text-ink-mute">{sess.open === 1 ? 'sesión' : 'sesiones'}</span></span>
                 {sess.online > 0
-                  ? <span className="text-xs font-medium text-emerald-600">· {sess.online} en línea</span>
+                  ? <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">· {sess.online} en línea</span>
                   : <span className="text-xs text-ink-mute">· todas idle</span>}
               </>
             ) : (

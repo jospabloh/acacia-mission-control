@@ -56,7 +56,7 @@ export function Announcements() {
     <div>
       <PageHeader title="Comunicados" subtitle="Mensajes a tus clientes — renovación, campañas y avisos de mantenimiento. Un solo canal, con confirmación." />
 
-      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Compose */}
@@ -64,7 +64,7 @@ export function Announcements() {
           <div>
             <label className="text-xs font-medium uppercase tracking-wide text-ink-mute">App</label>
             <select value={appId} onChange={(e) => { setAppId(e.target.value); setContacts(null) }}
-              className="mt-1 w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm">
+              className="mt-1 w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm">
               {MSG_APPS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
@@ -85,25 +85,25 @@ export function Announcements() {
           {type === 'campaign' && (
             <>
               <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Asunto"
-                className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm" />
+                className="w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm" />
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} placeholder="Cuerpo del mensaje… (un salto de línea doble = nuevo párrafo)"
-                className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm" />
+                className="w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm" />
             </>
           )}
           {type === 'maintenance' && (
             <>
               <div className="grid grid-cols-3 gap-2">
-                <input type="date" value={maint.date} onChange={(e) => setMaint({ ...maint, date: e.target.value })} className="rounded-lg border border-hair bg-white px-2 py-2 text-sm" />
-                <input type="time" value={maint.time} onChange={(e) => setMaint({ ...maint, time: e.target.value })} className="rounded-lg border border-hair bg-white px-2 py-2 text-sm" />
-                <input value={maint.duration} onChange={(e) => setMaint({ ...maint, duration: e.target.value })} placeholder="2 h" className="rounded-lg border border-hair bg-white px-2 py-2 text-sm" />
+                <input type="date" value={maint.date} onChange={(e) => setMaint({ ...maint, date: e.target.value })} className="rounded-lg border border-hair bg-paper-card px-2 py-2 text-sm" />
+                <input type="time" value={maint.time} onChange={(e) => setMaint({ ...maint, time: e.target.value })} className="rounded-lg border border-hair bg-paper-card px-2 py-2 text-sm" />
+                <input value={maint.duration} onChange={(e) => setMaint({ ...maint, duration: e.target.value })} placeholder="2 h" className="rounded-lg border border-hair bg-paper-card px-2 py-2 text-sm" />
               </div>
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Detalle opcional del mantenimiento…"
-                className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm" />
+                className="w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm" />
             </>
           )}
           {type === 'trial_offer' && (
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Detalle opcional (planes, precio, promoción)…"
-              className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm" />
+              className="w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm" />
           )}
           {type === 'renewal' && (
             <p className="rounded-lg bg-paper-subtle px-3 py-2 text-sm text-ink-soft">

@@ -2,29 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palette.
+   ---------------------------------------------------------------------------
+   Every colour the console draws with lives here as an RGB triple, and
+   tailwind.config.js maps its named tokens (paper / ink / brand / acacia /
+   hair) onto these variables. That indirection is the whole dark theme: adding
+   `.dark` to <html> re-points the variables and all ~600 existing
+   `bg-paper-card` / `text-ink-mute` / `border-hair` usages follow, with no
+   `dark:` variant to write or forget on any of them.
+
+   Triples rather than hex so Tailwind's opacity modifiers keep working —
+   `bg-brand/10` and `text-ink/60` compile to `rgb(var(--brand) / 0.1)`.
+
+   `--brand` is deliberately identical in both themes. It is the fill under
+   white button labels far more often than it is text, and lifting it for the
+   dark background would trade legible buttons for legible links. */
+:root {
+  color-scheme: light;
+
+  --paper: 247 246 242;         /* warm off-white page */
+  --paper-card: 255 255 255;
+  --paper-subtle: 239 239 234;
+
+  --ink: 14 13 20;
+
+  --brand: 59 110 248;          /* the "ac" monogram blue */
+  --brand-bright: 91 134 255;
+  --brand-deep: 43 86 212;      /* emphatic: darker than brand on a light page */
+
+  --acacia-50: 244 246 248;
+  --acacia-100: 231 235 240;
+  --acacia-500: 91 107 123;
+  --acacia-700: 55 66 77;
+  --acacia-900: 27 33 40;
+
+  --hair: rgba(14, 13, 20, 0.08);
+
+  --console-glow-strong: rgba(59, 110, 248, 0.16);
+  --console-glow-soft: rgba(59, 110, 248, 0.07);
+  --console-grid: rgba(14, 13, 20, 0.045);
+
+  --shadow-card: 0 1px 2px rgba(14, 13, 20, 0.04), 0 12px 40px -12px rgba(14, 13, 20, 0.18);
+  --shadow-glow: 0 0 0 1px rgba(59, 110, 248, 0.12), 0 18px 60px -20px rgba(59, 110, 248, 0.45);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --paper: 13 13 19;            /* the same warm-cool cast, inverted */
+  --paper-card: 22 22 30;
+  --paper-subtle: 30 30 40;
+
+  --ink: 242 241 247;
+
+  --brand: 59 110 248;
+  --brand-bright: 126 162 255;
+  --brand-deep: 141 176 255;    /* emphatic on a dark page means lighter, not darker */
+
+  /* The neutral ramp reverses end to end: `bg-acacia-50` still means "the
+     quietest surface" and `text-acacia-900` still means "the loudest text". */
+  --acacia-50: 27 33 40;
+  --acacia-100: 38 45 54;
+  --acacia-500: 148 160 173;
+  --acacia-700: 205 213 221;
+  --acacia-900: 240 243 246;
+
+  --hair: rgba(255, 255, 255, 0.10);
+
+  --console-glow-strong: rgba(59, 110, 248, 0.26);
+  --console-glow-soft: rgba(59, 110, 248, 0.12);
+  --console-grid: rgba(255, 255, 255, 0.05);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 40px -14px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 0 1px rgba(59, 110, 248, 0.28), 0 18px 60px -20px rgba(59, 110, 248, 0.55);
+}
+
 html, body, #root { height: 100%; }
 body {
   margin: 0;
-  background: #f7f6f2;
-  color: #0e0d14;
+  background: rgb(var(--paper));
+  color: rgb(var(--ink));
   font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Operations-console backdrop: warm paper + a single brand-blue glow + a
-   faint engineering dot-grid. Quiet on its own; the login card is the focus. */
+/* Operations-console backdrop: paper + a single brand-blue glow + a faint
+   engineering dot-grid. Quiet on its own; the login card is the focus. */
 .console-bg {
   position: relative;
   background:
-    radial-gradient(60rem 40rem at 85% -10%, rgba(59,110,248,0.16), transparent 60%),
-    radial-gradient(50rem 50rem at 0% 110%, rgba(59,110,248,0.07), transparent 55%),
-    #f7f6f2;
+    radial-gradient(60rem 40rem at 85% -10%, var(--console-glow-strong), transparent 60%),
+    radial-gradient(50rem 50rem at 0% 110%, var(--console-glow-soft), transparent 55%),
+    rgb(var(--paper));
 }
 .console-bg::before {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(14,13,20,0.045) 1px, transparent 1px);
+  background-image: radial-gradient(var(--console-grid) 1px, transparent 1px);
   background-size: 22px 22px;
   -webkit-mask-image: radial-gradient(70% 60% at 50% 40%, #000 30%, transparent 100%);
           mask-image: radial-gradient(70% 60% at 50% 40%, #000 30%, transparent 100%);
@@ -39,4 +114,11 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .rise { animation: none; }
+}
+
+/* Corner theme switcher (src/components/ThemeSwitcher.jsx) — placement only.
+   Mission Control has no bottom bar on any breakpoint. */
+:root {
+  --theme-switcher-bottom: 1rem;
+  --theme-switcher-right: 1rem;
 }

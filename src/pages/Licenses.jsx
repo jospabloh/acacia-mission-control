@@ -4,17 +4,17 @@ import { licenseAction, deletePremiumData } from '../lib/control.js'
 import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
 
 const STATUS_STYLE = {
-  active: 'bg-emerald-50 text-emerald-700',
-  trial: 'bg-blue-50 text-blue-700',
-  view_only: 'bg-amber-50 text-amber-700',
-  read_only: 'bg-amber-50 text-amber-700',
-  past_due: 'bg-amber-50 text-amber-700',
-  suspended: 'bg-red-50 text-red-700',
-  access_denied: 'bg-red-50 text-red-700',
-  canceled: 'bg-red-50 text-red-700',
-  cancelled: 'bg-red-50 text-red-700',
-  expired: 'bg-red-50 text-red-700',
-  deletion_eligible: 'bg-red-100 text-red-800 font-semibold',
+  active: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+  trial: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300',
+  view_only: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  read_only: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  past_due: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  suspended: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+  access_denied: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+  canceled: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+  cancelled: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+  expired: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+  deletion_eligible: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold',
 }
 
 // Mirror of api/_lib/licenseControl.js APPS[app].statuses (client can't import
@@ -50,9 +50,9 @@ const HAS_BILLING = new Set(['flowfin', 'stockflow', 'rumbo', 'liuma', 'puntos',
 const FIRST_OF_MONTH = new Set(['flowfin', 'liuma']) // align to the 1st (Mercado Pago bills on the 1st)
 
 const OP_COPY = {
-  reactivate: { label: 'Reactivar', cls: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50', warn: 'Reactiva el acceso de escritura del tenant.' },
-  suspend: { label: 'Pausar', cls: 'border-red-200 text-red-700 hover:bg-red-50', warn: 'Suspende la licencia: el tenant NO podrá escribir en la app.' },
-  view_only: { label: 'Solo lectura', cls: 'border-amber-200 text-amber-700 hover:bg-amber-50', warn: 'Pasa el tenant a solo lectura (puede consultar, no editar).' },
+  reactivate: { label: 'Reactivar', cls: 'border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:bg-emerald-950/40', warn: 'Reactiva el acceso de escritura del tenant.' },
+  suspend: { label: 'Pausar', cls: 'border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 hover:bg-red-50 dark:bg-red-950/40', warn: 'Suspende la licencia: el tenant NO podrá escribir en la app.' },
+  view_only: { label: 'Solo lectura', cls: 'border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:bg-amber-950/40', warn: 'Pasa el tenant a solo lectura (puede consultar, no editar).' },
 }
 
 const DAY = 86_400_000
@@ -103,8 +103,8 @@ function expiryInfo(row) {
   return { date: null, label: '—', tone: 'none', sub: null }
 }
 const TONE_CLS = {
-  bad: 'text-red-700 font-medium', warn: 'text-amber-700 font-medium',
-  info: 'text-blue-700', ok: 'text-ink-soft', none: 'text-ink-faint',
+  bad: 'text-red-700 dark:text-red-300 font-medium', warn: 'text-amber-700 dark:text-amber-300 font-medium',
+  info: 'text-blue-700 dark:text-blue-300', ok: 'text-ink-soft', none: 'text-ink-faint',
 }
 
 export function Licenses() {
@@ -227,7 +227,7 @@ export function Licenses() {
     <div>
       <PageHeader title="Licencias" subtitle="Estado, vencimiento y control de licencias por tenant. Confirma pagos y opera directamente sobre cada app." />
 
-      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 
       {rows === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>
@@ -257,7 +257,7 @@ export function Licenses() {
                     <td className="px-4 py-3">
                       <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{r.status ?? '—'}</span>
                       {r.raw?.export_confirmed_at && (
-                        <div className="mt-1 text-[11px] text-emerald-600">✓ Exportación confirmada {fmtDate(r.raw.export_confirmed_at)}</div>
+                        <div className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">✓ Exportación confirmada {fmtDate(r.raw.export_confirmed_at)}</div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -267,10 +267,10 @@ export function Licenses() {
                         const rr = renewals[`${r.app_id}|${r.external_id}`]
                         if (!rr) return null
                         return rr.verified
-                          ? <div className="mt-1 text-[11px] text-emerald-600">✓ Auto-renovado y verificado</div>
+                          ? <div className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">✓ Auto-renovado y verificado</div>
                           : (
                             <div className="mt-1 flex items-center gap-1.5">
-                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="Se renovó automáticamente asumiendo el cargo de Mercado Pago. Confirma que el cobro se realizó.">Auto-renovado · verificar</span>
+                              <span className="rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300" title="Se renovó automáticamente asumiendo el cargo de Mercado Pago. Confirma que el cobro se realizó.">Auto-renovado · verificar</span>
                               <button onClick={() => verifyRenewal(r)} className="text-[11px] font-medium text-brand hover:underline">Verificar</button>
                             </div>
                           )
@@ -297,13 +297,13 @@ export function Licenses() {
                               onClick={() => { setDel({ row: r }); setDelTyped('') }}
                               disabled={!r.raw?.export_confirmed_at}
                               title={r.raw?.export_confirmed_at ? undefined : 'El tenant aún no confirmó su exportación'}
-                              className="rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-2 py-1 text-xs font-medium text-red-800 dark:text-red-300 hover:bg-red-100 dark:bg-red-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Borrar datos Premium
                             </button>
                           )}
                           <select value="" onChange={(e) => e.target.value && ask(r, 'set_plan', e.target.value)}
-                            className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-ink">
+                            className="rounded-md border border-hair bg-paper-card px-2 py-1 text-xs text-ink">
                             <option value="">Plan…</option>
                             {plans.filter((p) => p !== r.plan).map((p) => <option key={p} value={p}>{p}</option>)}
                           </select>
@@ -329,8 +329,8 @@ export function Licenses() {
                           <div className="mt-1.5 flex w-full flex-wrap items-center gap-1.5 border-t border-hair pt-1.5">
                             <span className="text-[11px] text-ink-faint">Implementación:</span>
                             <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                              impl === 'completed' ? 'bg-emerald-50 text-emerald-700'
-                                : impl === 'requested' ? 'bg-amber-50 text-amber-700'
+                              impl === 'completed' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                                : impl === 'requested' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
                                   : 'bg-paper-subtle text-ink-mute'
                             }`}>
                               {impl === 'completed' ? 'Completada' : impl === 'requested' ? `Solicitada (${implTierLabel})` : 'Sin solicitar'}
@@ -339,7 +339,7 @@ export function Licenses() {
                               <button
                                 onClick={() => askAddon(r, 'implementation', 'completed', 'Marcar implementación como completada',
                                   'Marca la implementación asistida como completada, después de haber confirmado el pago único con la parroquia.')}
-                                className="rounded-md border border-emerald-200 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50">
+                                className="rounded-md border border-emerald-200 dark:border-emerald-900 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:bg-emerald-950/40">
                                 Marcar completada
                               </button>
                             )}
@@ -404,14 +404,14 @@ export function Licenses() {
 
             <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-ink-mute">Referencia de pago <span className="text-ink-faint normal-case">(opcional — ID Mercado Pago / folio)</span></label>
             <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="MP-123456 / nota manual"
-              className="mt-1.5 w-full rounded-lg border border-hair bg-white px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint" />
+              className="mt-1.5 w-full rounded-lg border border-hair bg-paper-card px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint" />
 
             <label className="mt-4 flex items-start gap-2 text-sm text-ink-soft">
               <input type="checkbox" checked={payEmail} onChange={(e) => setPayEmail(e.target.checked)} className="mt-0.5 accent-brand" />
               <span>Enviar correo de confirmación al admin de la tienda (agradecimiento + vigencia).</span>
             </label>
 
-            <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <p className="mt-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-300">
               Nuevo vencimiento: <span className="font-semibold">{fmtDate(previewExpiry(pay.row.current_period_end, months, pay.row.app_id).toISOString())}</span>. La licencia queda <span className="font-semibold">activa</span>.
             </p>
             <p className="mt-2 text-xs text-ink-faint">Confirma un pago recurrente ya cobrado en Mercado Pago. Se escribe sobre la app vía <code className="font-mono">acaciaControl</code> como <code className="font-mono">role:admin</code>.</p>
@@ -427,19 +427,19 @@ export function Licenses() {
       {/* Delete-premium-data modal — the only destructive action here */}
       {del && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/30 p-4" onClick={() => !busy && setDel(null)}>
-          <div className="w-full max-w-md rounded-2xl border border-red-200 bg-paper-card p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-display text-lg font-semibold text-red-800">Borrar datos Premium</h3>
+          <div className="w-full max-w-md rounded-2xl border border-red-200 dark:border-red-900 bg-paper-card p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-lg font-semibold text-red-800 dark:text-red-300">Borrar datos Premium</h3>
             <p className="mt-1 text-sm text-ink-soft">
               {del.row.apps?.name ?? del.row.app_id} · <span className="font-medium text-ink">{del.row.tenants?.name ?? del.row.external_id}</span>
             </p>
-            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+            <p className="mt-3 rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-800 dark:text-red-300">
               Esto borra permanentemente los Tutores y las relaciones tutor-niño de esta parroquia. Los niños, grupos y asistencia NO se ven afectados. Esta acción no se puede deshacer.
             </p>
             <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-ink-mute">
               Escribe el nombre exacto de la parroquia para confirmar: <span className="normal-case text-ink">{del.row.tenants?.name}</span>
             </label>
             <input value={delTyped} onChange={(e) => setDelTyped(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-hair bg-white px-3 py-1.5 text-sm text-ink" />
+              className="mt-1.5 w-full rounded-lg border border-hair bg-paper-card px-3 py-1.5 text-sm text-ink" />
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setDel(null)} disabled={busy} className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">Cancelar</button>
               <button onClick={runDelete} disabled={busy || delTyped !== del.row.tenants?.name} className="rounded-lg bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-40">{busy ? 'Borrando…' : 'Borrar datos Premium'}</button>

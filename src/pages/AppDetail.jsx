@@ -115,7 +115,7 @@ function FollowupDetail({ state, emailCapable }) {
     return <p className="text-xs text-ink-faint">Esta app no lleva registro de correos de seguimiento. <span className="text-ink-mute">(Envío manual: próxima fase.)</span></p>
   }
   if (!state || state.loading) return <p className="text-xs text-ink-mute">Cargando estado del correo…</p>
-  if (state.error) return <p className="text-xs text-red-600">No se pudo leer: {state.error}</p>
+  if (state.error) return <p className="text-xs text-red-600 dark:text-red-400">No se pudo leer: {state.error}</p>
   if (state.supported === false) return <p className="text-xs text-ink-faint">Sin registro de correos para este tenant.</p>
 
   const sent = (state.records ?? [])
@@ -127,12 +127,12 @@ function FollowupDetail({ state, emailCapable }) {
     <div className="space-y-2">
       {last ? (
         <div className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">✓ correo enviado</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 font-medium text-emerald-700 dark:text-emerald-300">✓ correo enviado</span>
           <span className="text-ink-mute">{last.sent_at ? new Date(last.sent_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'} · <span className="font-mono">{last.email_type}</span></span>
         </div>
       ) : (
         <div className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 font-medium text-amber-700">· sin correo de seguimiento</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 font-medium text-amber-700 dark:text-amber-300">· sin correo de seguimiento</span>
           <span className="text-ink-faint">aún no se ha enviado recordatorio</span>
         </div>
       )}
@@ -254,7 +254,7 @@ export function AppDetail() {
         )}
       </PageHeader>
 
-      {error && <p className="mb-4 text-sm text-red-600">No se pudo leer: {error}</p>}
+      {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">No se pudo leer: {error}</p>}
 
       {/* Control — sólo donde hay algo que controlar. En una app de catálogo era
           una tarjeta entera dedicada a decir que ahí no hay nada. */}
@@ -291,7 +291,7 @@ export function AppDetail() {
           )}
         </div>
         {flash && (
-          <p className={`mt-3 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>
+          <p className={`mt-3 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>
         )}
       </div>
       )}
@@ -374,7 +374,7 @@ export function AppDetail() {
                         <span className="font-medium text-ink truncate group-hover:text-brand">{u.name}</span>
                         <span className="text-ink-mute">· {u.type}</span>
                       </span>
-                      <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
+                      <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300' : 'bg-paper-subtle text-ink-mute'}`}>
                         {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
                       </span>
                     </button>

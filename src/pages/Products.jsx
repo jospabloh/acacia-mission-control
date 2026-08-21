@@ -16,7 +16,7 @@ export function Products() {
         title={cat ? CAT_LABEL[cat] ?? 'Productos' : 'Productos'}
         subtitle={cat ? 'Detalle de esta categoría del portafolio.' : 'Todo lo que opera ACACIA, por categoría.'}
       />
-      {error && <p className="mb-4 text-sm text-red-600">No se pudo leer el registro: {error}</p>}
+      {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">No se pudo leer el registro: {error}</p>}
       <PortfolioSections byCat={byCat} stats={stats} sessByApp={sessByApp} byApp={byApp} hasKpis={hasKpis} onlyCategory={cat} />
     </div>
   )

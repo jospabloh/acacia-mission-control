@@ -8,11 +8,11 @@ import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
 const ACTION_META = {
   'control:license-action': { label: 'Licencia', cls: 'bg-violet-50 text-violet-700' },
   'control:ticket-action': { label: 'Ticket', cls: 'bg-sky-50 text-sky-700' },
-  'control:send-message': { label: 'Comunicado', cls: 'bg-amber-50 text-amber-700' },
-  'control:run-sync': { label: 'Sync manual', cls: 'bg-emerald-50 text-emerald-700' },
+  'control:send-message': { label: 'Comunicado', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' },
+  'control:run-sync': { label: 'Sync manual', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' },
   'control:member-invite': { label: 'Operador +', cls: 'bg-brand/10 text-brand' },
   'control:member-role': { label: 'Operador rol', cls: 'bg-brand/10 text-brand' },
-  'control:member-remove': { label: 'Operador −', cls: 'bg-red-50 text-red-600' },
+  'control:member-remove': { label: 'Operador −', cls: 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400' },
   sync: { label: 'Cron', cls: 'bg-paper-subtle text-ink-mute' },
   'sync-licenses': { label: 'Cron licencias', cls: 'bg-paper-subtle text-ink-mute' },
   'sync-usage': { label: 'Cron uso', cls: 'bg-paper-subtle text-ink-mute' },
@@ -68,7 +68,7 @@ export function WriteControl() {
           <input type="checkbox" checked={onlyControl} onChange={(e) => setOnlyControl(e.target.checked)} className="accent-brand" />
           Solo acciones de control (ocultar crons)
         </label>
-        <select value={appFilter} onChange={(e) => setAppFilter(e.target.value)} className="rounded-lg border border-hair bg-white px-3 py-1.5">
+        <select value={appFilter} onChange={(e) => setAppFilter(e.target.value)} className="rounded-lg border border-hair bg-paper-card px-3 py-1.5">
           <option value="all">Todas las apps</option>
           {apps.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>

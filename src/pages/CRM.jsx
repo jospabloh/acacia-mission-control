@@ -5,11 +5,11 @@ import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 const PIPELINE = ['new', 'contacted', 'qualified', 'won', 'lost']
 const STATUS_LABEL = { new: 'Nuevo', contacted: 'Contactado', qualified: 'Calificado', won: 'Ganado', lost: 'Perdido' }
 const STATUS_STYLE = {
-  new: 'bg-blue-50 text-blue-700',
-  contacted: 'bg-amber-50 text-amber-700',
+  new: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300',
+  contacted: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
   qualified: 'bg-violet-50 text-violet-700',
-  won: 'bg-emerald-50 text-emerald-700',
-  lost: 'bg-red-50 text-red-700',
+  won: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+  lost: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
 }
 
 export function CRM() {
@@ -51,7 +51,7 @@ export function CRM() {
   return (
     <div>
       <PageHeader title="CRM" subtitle="Leads del sitio y seguimiento de pipeline." />
-      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Leads" value={kpis.total} hint={`${kpis.fresh} nuevos ≤7d`} />
@@ -82,7 +82,7 @@ export function CRM() {
                 <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{STATUS_LABEL[r.status] ?? r.status ?? '—'}</span></td>
                 <td className="px-4 py-3">
                   <select value="" disabled={busy === r.id} onChange={(e) => e.target.value && setStatus(r.id, e.target.value)}
-                    className="rounded-md border border-hair bg-white px-2 py-1 text-xs text-ink disabled:opacity-50">
+                    className="rounded-md border border-hair bg-paper-card px-2 py-1 text-xs text-ink disabled:opacity-50">
                     <option value="">{busy === r.id ? '…' : 'Cambiar…'}</option>
                     {PIPELINE.filter((s) => s !== r.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                   </select>

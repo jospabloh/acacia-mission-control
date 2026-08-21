@@ -10,6 +10,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <script>
+      // Applies the theme before React mounts so the first paint is already the
+      // right colour. Mirrors src/lib/ThemeContext.jsx exactly: same key, same
+      // 'light' | 'dark' | 'system' values, 'system' (and anything unreadable)
+      // resolving against the device. Keep both in sync.
+      (function () {
+        try {
+          var pref = localStorage.getItem('acacia-mc-theme');
+          if (pref !== 'light' && pref !== 'dark') pref = 'system';
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) { /* private mode or no matchMedia — fall through to light */ }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -9,7 +9,7 @@ export function Dashboard() {
     <div>
       <PageHeader title="Portafolio" subtitle="Control y analíticas de todo lo que opera ACACIA — un clic entra al panel de cada app." />
 
-      {error && <p className="mb-4 text-sm text-red-600">No se pudo leer el registro: {error}</p>}
+      {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">No se pudo leer el registro: {error}</p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Productos" value={totals.products} accent hint="en el portafolio" to="/products" />
