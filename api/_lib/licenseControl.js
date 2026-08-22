@@ -67,7 +67,9 @@ const APPS = {
   },
   rumbo: {
     entity: 'TenantLicense', statusField: 'status', planField: 'plan',
-    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' }, // suspend auto-blocks write_access
+    // `canceled` solo existe donde el enum del app lo tiene (TenantLicense.jsonc
+    // lo trae como 'cancelled'). El op `cancel` cae a `suspended` en el resto.
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only', canceled: 'cancelled' }, // suspend auto-blocks write_access
     plans: ['trial', 'starter', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'current_period_end', trialField: 'trial_ends_at', dateFormat: 'date', payment: 'rumbo', dayConvention: 'preserve_day' },
     // view_only agregado y desplegado al backend de Base44 el 2026-08-03
@@ -100,9 +102,12 @@ const APPS = {
     plans: ['starter', 'growth', 'pro', 'enterprise', 'founder'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day', activeExtra: { status: 'active' } },
     // puntos keeps an append-only LicenseEvent audit; mirror MC actions into it.
+    // Values must exist in LicenseEvent.jsonc's own enum — 'archived' is the
+    // terminal one, which is what a baja is; set_dates resolves at build time to
+    // license_renewed / license_expired depending on where the new date lands.
     audit: { entity: 'LicenseEvent', idField: 'business_id', eventType: {
       reactivate: 'reactivated', suspend: 'suspended', view_only: 'view_only', set_plan: 'plan_changed',
-      confirm_payment: 'license_renewed',
+      confirm_payment: 'license_renewed', cancel: 'archived', set_dates: 'license_renewed',
     } },
     // paidPlanValues excluye 'founder' de los planes de pago reales de puntos.
     lifecycle: { paidPlanValues: ['starter', 'growth', 'pro', 'enterprise'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
@@ -279,11 +284,40 @@ export const OP_LABEL = {
   set_plan: 'Cambiar plan',
   confirm_payment: 'Confirmar pago (renovar)',
   set_addon: 'Cambiar add-on',
+  set_dates: 'Editar fechas',
+  cancel: 'Dar de baja',
 }
 
 // Billing config for the renewal/payment flow (null when the app has none).
 export function billingFor(appId) {
   return APPS[appId]?.billing ?? null
+}
+
+// Which license-date fields this app actually has, and in what format. Apps
+// without a Mercado Pago billing block can still carry a period-end date the
+// lifecycle cron reads (cateqhub's premium_period_end_at), and the operator must
+// be able to edit that one too — so the expiry field is resolved from either
+// place. Returns { expiryField, trialField, dateFormat }; a null field means the
+// app has no such date and the UI must not offer it.
+export function licenseDateFields(appId) {
+  const cfg = APPS[appId]
+  if (!cfg) return { expiryField: null, trialField: null, dateFormat: 'datetime' }
+  return {
+    expiryField: cfg.billing?.expiryField ?? cfg.lifecycle?.periodEndField ?? null,
+    trialField: cfg.billing?.trialField ?? null,
+    dateFormat: cfg.billing?.dateFormat ?? 'datetime',
+  }
+}
+
+// Format a YYYY-MM-DD entered by the operator into what the app's schema expects.
+// A 'date' field takes the plain day; a 'datetime' field takes end-of-day UTC, so
+// a license set to expire "el 30" is still valid *during* the 30th (setting 00:00
+// would silently cut a day short — the operator picked a last valid day, not an
+// instant).
+function formatOperatorDate(day, dateFormat) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day))) return null
+  if (dateFormat === 'date') return String(day)
+  return `${day}T23:59:59.000Z`
 }
 
 // Add whole months to a date, clamping day-of-month overflow (e.g. Jan 31 + 1mo
@@ -317,7 +351,7 @@ export function computeRenewalExpiry({ currentExpiry, periodMonths = 1, dateForm
 // Build the { patch, log } the bridge `license.set` expects for one operation.
 // Returns { error } when the op/plan is invalid for the app.
 // ctx (confirm_payment only): { currentExpiry, periodMonths, paymentReference, now }.
-export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry, periodMonths, paymentReference, now, dayConventionOverride, addonKey, addonValue } = {}) {
+export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry, periodMonths, paymentReference, now, dayConventionOverride, addonKey, addonValue, expiryDate, trialEndsAt, alsoActivate } = {}) {
   const cfg = APPS[appId]
   if (!cfg) return { error: `app ${appId} no soporta control de licencia` }
 
@@ -383,6 +417,54 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
     patch[addonCfg.field] = addonValue
     const stampField = addonCfg.stampField?.[addonValue]
     if (stampField) patch[stampField] = (now ? new Date(now) : new Date()).toISOString()
+  } else if (op === 'set_dates') {
+    // Fecha de vencimiento (y de fin de prueba) escritas a mano, sin pasar por
+    // un pago: prórrogas, cortesías, corregir una fecha mal capturada, o mover a
+    // un tenant que paga por fuera. Escribe exactamente la fecha dada — a
+    // diferencia de confirm_payment, aquí NO se aplica el dayConvention del app
+    // ni se acumula desde el vencimiento actual: lo que el operador escribe es
+    // lo que queda.
+    const { expiryField, trialField, dateFormat } = licenseDateFields(appId)
+    if (expiryDate !== undefined && expiryDate !== null && expiryDate !== '') {
+      if (!expiryField) return { error: `${appId} no tiene campo de vencimiento` }
+      const val = formatOperatorDate(expiryDate, dateFormat)
+      if (!val) return { error: `fecha de vencimiento inválida: ${expiryDate} (usa YYYY-MM-DD)` }
+      patch[expiryField] = val
+      newExpiry = val
+      // Rumbo espeja el vencimiento en renews_at (igual que su confirm_payment).
+      if (cfg.billing?.payment === 'rumbo') patch.renews_at = val
+    }
+    if (trialEndsAt !== undefined && trialEndsAt !== null && trialEndsAt !== '') {
+      if (!trialField) return { error: `${appId} no maneja fecha de prueba` }
+      const val = formatOperatorDate(trialEndsAt, dateFormat)
+      if (!val) return { error: `fecha de prueba inválida: ${trialEndsAt} (usa YYYY-MM-DD)` }
+      patch[trialField] = val
+    }
+    if (Object.keys(patch).length === 0) return { error: 'no hay ninguna fecha que cambiar' }
+    // Una prórroga sobre un tenant pausado normalmente quiere devolverle el
+    // acceso; es opcional y explícito para que no se active nada por accidente.
+    if (alsoActivate) {
+      patch[cfg.statusField] = cfg.statuses.active
+      toStatus = cfg.statuses.active
+      if (cfg.billing?.activeExtra) Object.assign(patch, cfg.billing.activeExtra)
+    }
+  } else if (op === 'cancel') {
+    // Baja de la licencia. No existe un borrado de registros al otro lado del
+    // puente (license.set solo hace patch, a propósito), así que "borrar" es:
+    // dejar el tenant en el estado terminal que su propio enum soporta y vencer
+    // la licencia hoy mismo. El renglón se archiva del lado de Mission Control
+    // (ver control/license-action.js) — el dato de la app se conserva.
+    const val = cfg.statuses.canceled ?? cfg.statuses.suspended
+    if (!val) return { error: `'cancel' no aplica a ${appId}` }
+    patch[cfg.statusField] = val
+    toStatus = val
+    const { expiryField, dateFormat } = licenseDateFields(appId)
+    if (expiryField) {
+      const when = now ? new Date(now) : new Date()
+      patch[expiryField] = dateFormat === 'date' ? when.toISOString().slice(0, 10) : when.toISOString()
+      newExpiry = patch[expiryField]
+      if (cfg.billing?.payment === 'rumbo') patch.renews_at = patch[expiryField]
+    }
   } else {
     return { error: `op desconocida: ${op}` }
   }
@@ -390,11 +472,17 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
   const out = { patch }
   if (newExpiry) out.newExpiry = newExpiry
   if (cfg.audit) {
+    // Una fecha movida hacia atrás es un vencimiento, no una renovación — y el
+    // enum del app tiene las dos, así que vale la pena distinguirlas.
+    let eventType = cfg.audit.eventType[op] ?? op
+    if (op === 'set_dates' && newExpiry && new Date(newExpiry).getTime() < (now ? new Date(now) : new Date()).getTime()) {
+      eventType = 'license_expired'
+    }
     out.log = {
       entity: cfg.audit.entity,
       row: {
         [cfg.audit.idField]: undefined, // filled with the record id by the caller
-        event_type: cfg.audit.eventType[op] ?? op,
+        event_type: eventType,
         to_status: toStatus ?? undefined,
         to_plan: op === 'set_plan' ? plan : undefined,
         payment_reference: op === 'confirm_payment' && paymentReference ? String(paymentReference) : undefined,
@@ -410,4 +498,36 @@ export function buildLicenseChange(appId, op, { plan, actorEmail, currentExpiry,
 // List the valid plans for an app (for the UI plan picker).
 export function plansFor(appId) {
   return APPS[appId]?.plans ?? []
+}
+
+// Every app this file can control (for the panel's app filter).
+export function licenseControlAppIds() {
+  return Object.keys(APPS)
+}
+
+// The non-secret half of an app's license model: exactly what the panel needs to
+// know to decide which controls to show. `src/lib/licenseCatalog.js` is a literal
+// copy of this for every app (the client cannot import server code), and
+// src/lib/licenseCatalog.test.js fails the build if the two ever disagree — so
+// adding an app or a status here is enough to keep the UI honest.
+export function licenseCapabilities(appId) {
+  const cfg = APPS[appId]
+  if (!cfg) return null
+  const { expiryField, trialField, dateFormat } = licenseDateFields(appId)
+  return {
+    plans: [...(cfg.plans ?? [])],
+    statuses: {
+      active: cfg.statuses.active ?? null,
+      suspend: cfg.statuses.suspended ?? null,
+      view_only: cfg.statuses.view_only ?? null,
+      cancel: cfg.statuses.canceled ?? cfg.statuses.suspended ?? null,
+    },
+    hasBilling: Boolean(cfg.billing),
+    hasViewOnly: Boolean(cfg.statuses.view_only),
+    hasExpiry: Boolean(expiryField),
+    hasTrial: Boolean(trialField),
+    dateFormat,
+    dayConvention: cfg.billing?.dayConvention ?? null,
+    addons: Object.keys(cfg.addons ?? {}),
+  }
 }
