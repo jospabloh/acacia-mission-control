@@ -1,0 +1,40 @@
+name: Production smoke test
+
+# Live-site check. It runs here rather than in the push/PR job because the
+# development sandboxes this portfolio is built from proxy outbound HTTPS to an
+# allowlist that excludes these domains — GitHub Actions is the only place that
+# can actually reach the deployed app.
+#
+# Manual so it can be run on demand right after a deploy, instead of waiting for
+# the next tick; the daily cron is the backstop that catches the regression
+# nobody thought to trigger it for.
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_url:
+        description: "URL to test (defaults to production)"
+        required: false
+        default: "https://control.acaciaco.com.mx"
+  schedule:
+    - cron: "0 13 * * *" # 07:00 Mexico City (UTC-6)
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:smoke
+        env:
+          SMOKE_URL: ${{ github.event.inputs.smoke_url || 'https://control.acaciaco.com.mx' }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: smoke-test-results
+          path: test-results/
+          retention-days: 7

@@ -19,9 +19,9 @@ const BUTTON_VARIANTS = {
   secondary: 'border border-hair bg-paper-card text-ink hover:bg-paper-subtle',
   ghost: 'text-ink-soft hover:bg-paper-subtle hover:text-ink',
   danger: 'bg-red-700 text-white hover:bg-red-800',
-  'danger-soft': 'border border-red-200 bg-red-50 text-red-800 hover:bg-red-100',
-  positive: 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
-  warn: 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100',
+  'danger-soft': 'border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/40',
+  positive: 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40',
+  warn: 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40',
 }
 const BUTTON_SIZES = {
   sm: 'h-7 px-2.5 text-xs gap-1.5',
@@ -42,11 +42,11 @@ export function Button({ variant = 'secondary', size = 'md', icon, className = '
 }
 
 const BADGE_TONES = {
-  ok: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15',
-  info: 'bg-blue-50 text-blue-700 ring-blue-600/15',
-  warn: 'bg-amber-50 text-amber-800 ring-amber-600/20',
-  bad: 'bg-red-50 text-red-700 ring-red-600/15',
-  critical: 'bg-red-100 text-red-900 ring-red-700/25',
+  ok: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-500/25',
+  info: 'bg-blue-50 text-blue-700 ring-blue-600/15 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-500/25',
+  warn: 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-500/30',
+  bad: 'bg-red-50 text-red-700 ring-red-600/15 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-500/25',
+  critical: 'bg-red-100 text-red-900 ring-red-700/25 dark:bg-red-900/50 dark:text-red-200 dark:ring-red-500/35',
   neutral: 'bg-paper-subtle text-ink-mute ring-ink/5',
 }
 
@@ -189,7 +189,7 @@ export function ActionMenu({ items, label = 'Acciones', align = 'right' }) {
               key={it.label} role="menuitem" disabled={it.disabled} title={it.title}
               onClick={() => { setOpen(false); it.onClick() }}
               className={`block w-full px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${
-                it.tone === 'danger' ? 'text-red-700 hover:bg-red-50' : 'text-ink hover:bg-paper-subtle'
+                it.tone === 'danger' ? 'text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40' : 'text-ink hover:bg-paper-subtle'
               }`}
             >
               {it.label}
@@ -222,9 +222,9 @@ export function Modal({ open, onClose, title, subtitle, tone = 'neutral', childr
       <div
         ref={panel} role="dialog" aria-modal="true" aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`rise w-full max-w-md rounded-2xl border bg-paper-card p-6 shadow-card ${tone === 'danger' ? 'border-red-200' : 'border-hair'}`}
+        className={`rise w-full max-w-md rounded-2xl border bg-paper-card p-6 shadow-card ${tone === 'danger' ? 'border-red-200 dark:border-red-900' : 'border-hair'}`}
       >
-        <h3 className={`font-display text-lg font-semibold ${tone === 'danger' ? 'text-red-800' : 'text-ink'}`}>{title}</h3>
+        <h3 className={`font-display text-lg font-semibold ${tone === 'danger' ? 'text-red-800 dark:text-red-300' : 'text-ink'}`}>{title}</h3>
         {subtitle && <div className="mt-1 text-sm text-ink-soft">{subtitle}</div>}
         <div className="mt-4">{children}</div>
         {footer && <div className="mt-6 flex flex-wrap justify-end gap-2">{footer}</div>}
@@ -238,9 +238,9 @@ export function Modal({ open, onClose, title, subtitle, tone = 'neutral', childr
 export function Callout({ tone = 'neutral', children }) {
   const cls = {
     neutral: 'bg-paper-subtle text-ink-soft',
-    ok: 'bg-emerald-50 text-emerald-900',
-    warn: 'bg-amber-50 text-amber-900',
-    danger: 'bg-red-50 text-red-900',
+    ok: 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200',
+    warn: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
+    danger: 'bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200',
   }[tone]
   return <div className={`rounded-lg px-3 py-2 text-sm ${cls}`}>{children}</div>
 }
@@ -255,7 +255,7 @@ export function ToastStack({ toasts, onDismiss }) {
         <div
           key={t.id} role="status"
           className={`rise pointer-events-auto flex items-start gap-2.5 rounded-xl border px-3.5 py-3 shadow-card ${
-            t.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'
+            t.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200'
           }`}
         >
           <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${t.ok ? 'bg-emerald-600' : 'bg-red-600'}`}>

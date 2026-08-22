@@ -426,15 +426,15 @@ export function Licenses() {
         <div className="flex items-baseline gap-1.5">
           <span className={`text-sm tabular-nums ${
             r.archived_at ? 'text-ink-mute'
-              : s.kind === 'overdue' ? 'font-semibold text-red-700'
-                : s.kind === 'soon' ? 'font-semibold text-amber-700' : 'text-ink-soft'
+              : s.kind === 'overdue' ? 'font-semibold text-red-700 dark:text-red-300'
+                : s.kind === 'soon' ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-ink-soft'
           }`}>
             {s.date ? fmtDate(s.date) : '—'}
           </span>
-          {!r.archived_at && s.kind === 'overdue' && <span className="text-[11px] text-red-600">hace {Math.abs(s.days)} d</span>}
-          {!r.archived_at && s.kind === 'soon' && <span className="text-[11px] text-amber-700">en {s.days} d</span>}
+          {!r.archived_at && s.kind === 'overdue' && <span className="text-[11px] text-red-600 dark:text-red-400">hace {Math.abs(s.days)} d</span>}
+          {!r.archived_at && s.kind === 'soon' && <span className="text-[11px] text-amber-700 dark:text-amber-300">en {s.days} d</span>}
         </div>
-        {s.isTrial && s.date && <div className="text-[11px] text-blue-700">fin de la prueba</div>}
+        {s.isTrial && s.date && <div className="text-[11px] text-blue-700 dark:text-blue-300">fin de la prueba</div>}
         {!r.archived_at && <LifecycleRail expiry={s.date?.toISOString()} />}
         {rr && !rr.verified && !r.archived_at && (
           <div className="mt-1.5 flex items-center gap-1.5">
@@ -442,7 +442,7 @@ export function Licenses() {
             <button onClick={() => verifyRenewal(r)} className="text-[11px] font-medium text-brand hover:underline">Verificar</button>
           </div>
         )}
-        {rr?.verified && <div className="mt-1 text-[11px] text-emerald-600">Cobro verificado</div>}
+        {rr?.verified && <div className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">Cobro verificado</div>}
       </>
     )
   }
@@ -467,7 +467,7 @@ export function Licenses() {
             </p>
           )}
           {r.raw?.export_confirmed_at && (
-            <p className="mt-2 text-xs text-emerald-700">Exportación confirmada el {fmtDate(r.raw.export_confirmed_at)}.</p>
+            <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">Exportación confirmada el {fmtDate(r.raw.export_confirmed_at)}.</p>
           )}
         </div>
 
