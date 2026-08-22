@@ -75,7 +75,7 @@ export function Settings() {
       <PageHeader title="Ajustes" subtitle="Operadores y roles de Mission Control. Solo el owner gestiona aquí." />
 
       {flash && (
-        <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>
+        <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>
       )}
 
       {/* Invitar */}
@@ -150,7 +150,7 @@ export function Settings() {
                           onClick={() => onRemove(m)}
                           disabled={busy || isLastOwner}
                           title={isLastOwner ? 'No puedes quitar al único owner' : 'Quitar operador'}
-                          className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent">
+                          className="rounded-lg border border-red-200 dark:border-red-900 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:bg-red-950/40 disabled:opacity-40 disabled:hover:bg-transparent">
                           Quitar
                         </button>
                       </div>

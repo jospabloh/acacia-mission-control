@@ -18,13 +18,13 @@ const STATUSES = {
 }
 // Status → tone, case-insensitive.
 const STATUS_TONE = {
-  open: 'bg-blue-50 text-blue-700', in_progress: 'bg-amber-50 text-amber-700',
-  waiting_user: 'bg-amber-50 text-amber-700', waiting_customer: 'bg-amber-50 text-amber-700',
-  escalated: 'bg-red-50 text-red-700', resolved: 'bg-emerald-50 text-emerald-700',
-  ai_resolved: 'bg-emerald-50 text-emerald-700', closed: 'bg-paper-subtle text-ink-mute',
+  open: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', in_progress: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  waiting_user: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300', waiting_customer: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  escalated: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300', resolved: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+  ai_resolved: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300', closed: 'bg-paper-subtle text-ink-mute',
 }
 const PRIO_TONE = {
-  urgent: 'text-red-700 font-semibold', high: 'text-amber-700 font-medium',
+  urgent: 'text-red-700 dark:text-red-300 font-semibold', high: 'text-amber-700 dark:text-amber-300 font-medium',
   normal: 'text-ink-soft', low: 'text-ink-faint',
 }
 const OPEN_ISH = new Set(['open', 'in_progress', 'waiting_user', 'waiting_customer', 'escalated'])
@@ -49,8 +49,8 @@ function slaBadge(row) {
   const h = Math.floor(mins / 60)
   const txt = h >= 1 ? `${h}h ${mins % 60}m` : `${mins}m`
   return ms < 0
-    ? { label: `SLA vencido ${txt}`, cls: 'bg-red-50 text-red-700' }
-    : { label: `SLA ${txt}`, cls: mins <= 120 ? 'bg-amber-50 text-amber-700' : 'bg-paper-subtle text-ink-mute' }
+    ? { label: `SLA vencido ${txt}`, cls: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300' }
+    : { label: `SLA ${txt}`, cls: mins <= 120 ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' : 'bg-paper-subtle text-ink-mute' }
 }
 
 // Structured "BA/PO brief" the apps' AI intake assistant attaches to a ticket
@@ -195,11 +195,11 @@ export function Support() {
         </button>
       </PageHeader>
 
-      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+      {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <select value={filterApp} onChange={(e) => setFilterApp(e.target.value)}
-          className="rounded-lg border border-hair bg-white px-3 py-1.5">
+          className="rounded-lg border border-hair bg-paper-card px-3 py-1.5">
           <option value="all">Todas las apps</option>
           {TICKET_APPS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
@@ -260,7 +260,7 @@ export function Support() {
                     </p>
                   </div>
                   <select value="" onChange={(e) => e.target.value && changeStatus(e.target.value)} disabled={busy}
-                    className="shrink-0 rounded-md border border-hair bg-white px-2 py-1 text-xs text-ink disabled:opacity-50">
+                    className="shrink-0 rounded-md border border-hair bg-paper-card px-2 py-1 text-xs text-ink disabled:opacity-50">
                     <option value="">Estado: {sel.status ?? '—'}…</option>
                     {(STATUSES[sel.app_id] ?? []).filter((s) => s !== sel.status).map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -286,7 +286,7 @@ export function Support() {
 
                 <div className="mt-4 border-t border-hair pt-4">
                   <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder="Escribe una respuesta como ACACIA Soporte…"
-                    className="w-full rounded-lg border border-hair bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-faint" />
+                    className="w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm text-ink placeholder:text-ink-faint" />
                   <div className="mt-2 flex items-center justify-between">
                     <span className="text-xs text-ink-faint">Se envía al cliente vía el puente <code className="font-mono">acaciaControl</code>.</span>
                     <button onClick={sendReply} disabled={busy || !reply.trim()}

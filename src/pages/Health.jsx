@@ -4,10 +4,10 @@ import { runSync } from '../lib/control.js'
 import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
 
 const TONE = {
-  ok: { dot: 'bg-emerald-500', text: 'text-emerald-700', label: 'Operativo' },
-  degraded: { dot: 'bg-amber-500', text: 'text-amber-700', label: 'Degradado' },
-  down: { dot: 'bg-red-500', text: 'text-red-700', label: 'Caído' },
-  unknown: { dot: 'bg-slate-300', text: 'text-ink-faint', label: 'Sin datos' },
+  ok: { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300', label: 'Operativo' },
+  degraded: { dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300', label: 'Degradado' },
+  down: { dot: 'bg-red-500', text: 'text-red-700 dark:text-red-300', label: 'Caído' },
+  unknown: { dot: 'bg-slate-300 dark:bg-slate-600', text: 'text-ink-faint', label: 'Sin datos' },
 }
 
 function fmtWhen(v) {
@@ -106,7 +106,7 @@ export function Health() {
         </div>
       )}
 
-      {!busy && flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700' : 'text-red-600'}`}>{flash.msg}</p>}
+      {!busy && flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 
       {apps === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>

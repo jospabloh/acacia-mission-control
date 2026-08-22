@@ -12,7 +12,7 @@ import { Icon } from './icons.jsx'
 function StateBadge({ state }) {
   if (state === 'online') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -21,7 +21,7 @@ function StateBadge({ state }) {
       </span>
     )
   }
-  return <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> idle</span>
+  return <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> idle</span>
 }
 
 // One session row inside an expanded user.
@@ -51,12 +51,12 @@ function SessionRow({ appId, session, isOwner, onChange }) {
       </div>
       <div className="ml-auto flex items-center gap-3">
         <span className="min-w-[92px] text-right text-xs tabular-nums text-ink-soft">
-          {active ? <StateBadge state="online" /> : <>idle <span className="font-semibold text-amber-700">{fmtIdle(session.idle_ms)}</span></>}
+          {active ? <StateBadge state="online" /> : <>idle <span className="font-semibold text-amber-700 dark:text-amber-300">{fmtIdle(session.idle_ms)}</span></>}
         </span>
         {active ? (
           isOwner ? (
             <button onClick={() => close({ override: true })} disabled={busy}
-              className="rounded-lg border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-500 hover:text-white disabled:opacity-50">
+              className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-500 hover:text-white disabled:opacity-50">
               {busy ? '…' : 'Forzar cierre'}
             </button>
           ) : (
@@ -67,7 +67,7 @@ function SessionRow({ appId, session, isOwner, onChange }) {
           )
         ) : (
           <button onClick={() => close()} disabled={busy}
-            className="rounded-lg border border-hair bg-paper-card px-2.5 py-1 text-xs font-semibold text-ink hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-50">
+            className="rounded-lg border border-hair bg-paper-card px-2.5 py-1 text-xs font-semibold text-ink hover:border-red-300 dark:border-red-800 hover:bg-red-50 dark:bg-red-950/40 hover:text-red-700 dark:text-red-300 disabled:opacity-50">
             {busy ? '…' : 'Cerrar'}
           </button>
         )}
@@ -125,8 +125,8 @@ function UserRow({ appId, user, isOwner, onChange }) {
         </span>
         <span className="ml-auto flex items-center gap-3">
           {activeCount > 0
-            ? <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {activeCount} en línea</span>
-            : <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {idleCount} idle</span>}
+            ? <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {activeCount} en línea</span>
+            : <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {idleCount} idle</span>}
           <span className="text-xs text-ink-mute"><span className="font-display font-semibold text-ink">{user.sessions.length}</span> {user.sessions.length === 1 ? 'sesión' : 'sesiones'}</span>
         </span>
       </button>
@@ -148,7 +148,7 @@ function UserRow({ appId, user, isOwner, onChange }) {
             </button>
             {isOwner && (
               <button onClick={closeAll} disabled={busy}
-                className="rounded-lg border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
+                className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
                 {busy ? '…' : 'Cerrar todo (log off)'}
               </button>
             )}
@@ -223,8 +223,8 @@ export function SessionsPanel({ appId, supported }) {
         </p>
       </div>
 
-      {flash && <p className={`mt-3 text-sm ${flash.bad ? 'text-red-600' : 'text-emerald-700'}`}>{flash.msg}</p>}
-      {error && <p className="mt-3 text-sm text-red-600">No se pudo leer las sesiones: {error}</p>}
+      {flash && <p className={`mt-3 text-sm ${flash.bad ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-300'}`}>{flash.msg}</p>}
+      {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">No se pudo leer las sesiones: {error}</p>}
 
       {data && (
         <div className="mt-4 border-t border-hair">

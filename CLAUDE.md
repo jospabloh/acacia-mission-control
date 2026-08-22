@@ -116,3 +116,57 @@ que alguien lo cierra.
 See `.env.example`. Client vars are `VITE_*` (anon). Server-only secrets
 (`SUPABASE_SERVICE_ROLE_KEY`, `BASE44_*`, `MERCADOPAGO_*`, `INGEST_HMAC_SECRET`)
 must **not** carry the `VITE_` prefix — that would leak them into the bundle.
+
+## Selector de tema: claro / oscuro / dispositivo (módulo 12, 2026-08-21)
+
+El tema se elige desde **un solo control**: un círculo pequeño anclado a una
+esquina de la pantalla que muestra el modo vigente y, al pulsarlo, crece de lado
+en una pista de tres ranuras (Claro · Oscuro · Sistema) con un indicador que se
+desliza a la elegida. Tres estados, tres posiciones físicas — que es justo lo
+que un botón sol/luna de dos estados no puede expresar en cuanto "seguir al
+dispositivo" entra en la lista.
+
+Lo que se guarda es la **preferencia** (`light` | `dark` | `system`), nunca el
+color resuelto: con `system` la app sigue a `prefers-color-scheme` en vivo, sin
+recargar. `index.html` trae un script pre-montaje que resuelve y aplica el tema
+antes de que monte React, así que el primer frame ya sale del color correcto;
+ese script y el proveedor comparten clave y valores, y cada uno lleva un
+comentario apuntando al otro.
+
+`src/components/ThemeSwitcher.jsx` es **idéntico byte a byte en todas las apps
+del portafolio**. La fuente canónica vive en `jospabloh/acacia-app-standard` →
+`shared/theme/`: cámbialo allí y cópialo, no lo edites aquí. Lo único propio de
+esta app es `src/lib/useThemeMode.js` (de dónde sale el estado) y las variables
+`--theme-switcher-bottom/right` en `src/index.css` (dónde se coloca).
+
+**Mission Control no tenía tema oscuro en absoluto.** En vez de escribir una
+variante `dark:` en ~625 usos de clase repartidos por 24 archivos, los colores
+de `tailwind.config.js` dejaron de ser hexadecimales y pasan por variables CSS
+declaradas en `src/index.css`; `.dark` las reapunta y todos los
+`bg-paper-card` / `text-ink-mute` / `border-hair` que ya existían siguen el
+tema sin tocar un solo JSX. Los tripletes son RGB para que los modificadores de
+opacidad (`bg-brand/10`, `text-ink/60`) sigan compilando.
+
+Un color nuevo en hexadecimal dentro de `tailwind.config.js` es un color que no
+seguirá el tema: decláralo como variable.
+
+Lo que sí necesitó variante explícita son los chips de estado (rojo / ámbar /
+esmeralda / azul), porque llevan significado y no superficie: un fondo `-50`
+pasa a un tinte profundo y el texto `6xx/7xx/8xx` sube a `3xx/4xx`. Los acentos
+saturados (puntos y barras `-400/-500`) se dejaron como estaban: ya se leen
+sobre los dos fondos.
+
+`--brand` es deliberadamente **el mismo** en claro y en oscuro. Es fondo bajo
+texto blanco más veces de las que es texto, y aclararlo para el fondo oscuro
+cambiaría botones legibles por enlaces legibles.
+
+El estado del tema vive en `src/lib/theme/` partido en tres archivos
+(contexto / proveedor / hook), igual que `src/lib/auth/`, porque exportar un
+hook y un componente del mismo archivo rompe react-refresh y el lint de este
+repo lo marca. `vite.config.js` ganó el alias `@` → `src` para que el
+`ThemeSwitcher` compartido pueda quedarse idéntico al del resto del portafolio.
+
+**No verificado:** las pantallas autenticadas (Dashboard, Licencias, Soporte…)
+en oscuro — no son alcanzables sin una sesión de Supabase en este entorno. El
+riesgo está acotado: todas dibujan con los mismos tokens que sí se revisaron en
+`/` (login) y ninguna quedó con un color claro hardcodeado tras el barrido.

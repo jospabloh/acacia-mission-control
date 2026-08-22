@@ -29,7 +29,7 @@ function Delta({ values }) {
   const d = pts[pts.length - 1] - pts[pts.length - 2]
   if (d === 0) return <span className="text-[11px] text-ink-faint">=</span>
   const up = d > 0
-  return <span className={`text-[11px] font-medium ${up ? 'text-emerald-600' : 'text-red-500'}`}>{up ? '▲' : '▼'} {fmt(Math.abs(d))}</span>
+  return <span className={`text-[11px] font-medium ${up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{up ? '▲' : '▼'} {fmt(Math.abs(d))}</span>
 }
 
 const USAGE_APPS = [
@@ -54,13 +54,13 @@ function TenantConsumption() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-mute">Consumo por tenant</h3>
         <select value={appId} onChange={(e) => setAppId(e.target.value)}
-          className="rounded-lg border border-hair bg-white px-3 py-1.5 text-sm">
+          className="rounded-lg border border-hair bg-paper-card px-3 py-1.5 text-sm">
           {USAGE_APPS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
       </div>
       <p className="mt-1 text-xs text-ink-faint">Tenants con más {res?.label ?? 'actividad'} — para upsell o soporte proactivo. Solo conteos, sin datos personales.</p>
       {loading ? <p className="mt-3 text-sm text-ink-mute">Cargando…</p>
-        : err ? <p className="mt-3 text-sm text-red-600">No se pudo leer: {err}</p>
+        : err ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">No se pudo leer: {err}</p>
         : top.length ? (
           <div className="mt-4 space-y-2.5">
             {top.slice(0, 10).map((r, i) => (
@@ -146,7 +146,7 @@ export function Analytics() {
 
   const maxTenants = useMemo(() => Math.max(1, ...(data?.byApp ?? []).map((a) => a.tenants)), [data])
 
-  if (error) return (<div><PageHeader title="Analítica" /><p className="text-sm text-red-600">No se pudo leer: {error}</p></div>)
+  if (error) return (<div><PageHeader title="Analítica" /><p className="text-sm text-red-600 dark:text-red-400">No se pudo leer: {error}</p></div>)
   if (!data) return (<div><PageHeader title="Analítica" /><p className="text-sm text-ink-mute">Cargando…</p></div>)
 
   const t = data.totals
@@ -271,7 +271,7 @@ export function Analytics() {
                 <span className="font-medium text-ink truncate">{u.name}</span>
                 <span className="text-ink-mute">· {u.type}</span>
               </span>
-              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 text-red-700' : 'bg-paper-subtle text-ink-mute'}`}>
+              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${u.in_days <= 7 ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300' : 'bg-paper-subtle text-ink-mute'}`}>
                 {u.in_days === 0 ? 'hoy' : `en ${u.in_days}d`}
               </span>
             </div>

@@ -177,7 +177,7 @@ export function LoginGate({ children }) {
 
                 {GOOGLE_ENABLED && (
                   <button onClick={onGoogle} disabled={googleBusy || busy}
-                    className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
+                    className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-paper-card text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
                     {googleBusy
                       ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
                       : <><GoogleMark /> Continuar con Google</>}
@@ -191,11 +191,11 @@ export function LoginGate({ children }) {
                     <span className="text-xs font-medium text-ink-soft">Contraseña</span>
                     <input type="password" value={password} required autoFocus autoComplete="current-password"
                       onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••"
-                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
+                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-paper-card px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
                   </label>
 
                   {error && (
-                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
+                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900 px-3 py-2 text-sm text-red-700 dark:text-red-300">
                       <span aria-hidden="true" className="mt-px">⚠</span>
                       <span>{error}</span>
                     </p>
@@ -225,7 +225,7 @@ export function LoginGate({ children }) {
                 {GOOGLE_ENABLED && (
                   <>
                     <button onClick={onGoogle} disabled={googleBusy || busy}
-                      className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-white text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
+                      className="mt-6 w-full h-11 inline-flex items-center justify-center gap-3 rounded-xl border border-hair bg-paper-card text-sm font-medium text-ink hover:bg-paper-subtle transition-colors disabled:opacity-60">
                       {googleBusy
                         ? <span className="font-display tracking-wide text-ink-mute">Redirigiendo…</span>
                         : <><GoogleMark /> Continuar con Google</>}
@@ -242,17 +242,17 @@ export function LoginGate({ children }) {
                     <span className="text-xs font-medium text-ink-soft">Correo</span>
                     <input type="email" value={email} required autoComplete="email"
                       onChange={(e) => setEmail(e.target.value)} placeholder="tu@acaciaco.com.mx"
-                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
+                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-paper-card px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
                   </label>
                   <label className="block">
                     <span className="text-xs font-medium text-ink-soft">Contraseña</span>
                     <input type="password" value={password} required autoComplete="current-password"
                       onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••"
-                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
+                      className="mt-1 w-full h-11 rounded-xl border border-hair bg-paper-card px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition" />
                   </label>
 
                   {error && (
-                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
+                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900 px-3 py-2 text-sm text-red-700 dark:text-red-300">
                       <span aria-hidden="true" className="mt-px">⚠</span>
                       <span>{error}</span>
                     </p>
@@ -278,7 +278,7 @@ export function LoginGate({ children }) {
             {SYSTEMS.map((s) => (
               <span key={s.id} title={s.name} className="inline-flex items-center">
                 {s.logo
-                  ? <img src={s.logo} alt={s.name} className="h-5 w-auto max-w-[88px] object-contain opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition" />
+                  ? <img src={s.logo} alt={s.name} className="h-5 w-auto max-w-[88px] object-contain opacity-50 grayscale transition hover:opacity-100 hover:grayscale-0 dark:rounded dark:bg-white/85 dark:p-0.5 dark:opacity-60 dark:grayscale-0 dark:hover:opacity-100" />
                   : <span className="font-display text-xs font-semibold text-ink-mute hover:text-ink transition">{s.name}</span>}
               </span>
             ))}
