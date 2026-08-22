@@ -260,3 +260,72 @@ test('set_plan en los 6 apps sin periodEndField: patch tiene EXACTAMENTE una lla
     assert.equal('undefined' in patch, false, `${id}: patch NO debería tener la llave literal "undefined"`)
   }
 })
+
+// ── set_dates: el operador escribe la fecha, tal cual ────────────────────────
+
+test('set_dates escribe el vencimiento como fin del día (campo datetime)', () => {
+  const { patch, newExpiry, error } = buildLicenseChange('stockflow', 'set_dates', { expiryDate: '2026-09-30', now: NOW })
+  assert.equal(error, undefined)
+  // Fin del día, no 00:00: una licencia "hasta el 30" sigue válida durante el 30.
+  assert.equal(patch.license_expires_at, '2026-09-30T23:59:59.000Z')
+  assert.equal(newExpiry, '2026-09-30T23:59:59.000Z')
+  assert.equal('billing_status' in patch, false, 'no debe tocar el estado sin alsoActivate')
+})
+
+test('set_dates respeta el formato date y espeja renews_at en rumbo', () => {
+  const { patch } = buildLicenseChange('rumbo', 'set_dates', { expiryDate: '2026-09-30', now: NOW })
+  assert.equal(patch.current_period_end, '2026-09-30')
+  assert.equal(patch.renews_at, '2026-09-30', 'rumbo espeja el vencimiento en renews_at')
+})
+
+test('set_dates NO aplica el dayConvention del app (a diferencia de confirm_payment)', () => {
+  // flowfin normalmente cae al 1° del mes; una fecha escrita a mano se respeta.
+  const { patch } = buildLicenseChange('flowfin', 'set_dates', { expiryDate: '2026-09-17', now: NOW })
+  assert.equal(patch.license_expires_at, '2026-09-17T23:59:59.000Z')
+})
+
+test('set_dates edita el vencimiento de cateqhub aunque no tenga billing', () => {
+  // Su fecha vive en lifecycle.periodEndField, no en un bloque billing.
+  const { patch, error } = buildLicenseChange('cateqhub', 'set_dates', { expiryDate: '2026-12-01', now: NOW })
+  assert.equal(error, undefined)
+  assert.equal(patch.premium_period_end_at, '2026-12-01T23:59:59.000Z')
+})
+
+test('set_dates rechaza una fecha mal escrita y una app sin fecha de prueba', () => {
+  assert.match(buildLicenseChange('stockflow', 'set_dates', { expiryDate: '30/09/2026' }).error, /inválida/)
+  assert.match(buildLicenseChange('radar', 'set_dates', { trialEndsAt: '2026-09-30' }).error, /prueba/)
+  assert.match(buildLicenseChange('stockflow', 'set_dates', {}).error, /ninguna fecha/)
+})
+
+test('set_dates con alsoActivate reactiva además de mover la fecha', () => {
+  const { patch } = buildLicenseChange('puntos', 'set_dates', { expiryDate: '2026-09-30', alsoActivate: true, now: NOW })
+  assert.equal(patch.billing_status, 'active')
+  assert.equal(patch.status, 'active', 'puntos también abre su gate operativo')
+})
+
+// ── cancel: baja de la licencia ──────────────────────────────────────────────
+
+test('cancel usa el estado terminal del app y vence la licencia hoy', () => {
+  const rumbo = buildLicenseChange('rumbo', 'cancel', { now: NOW })
+  assert.equal(rumbo.patch.status, 'cancelled', 'rumbo sí tiene "cancelled" en su enum')
+  assert.equal(rumbo.patch.current_period_end, '2026-06-15')
+
+  const sf = buildLicenseChange('stockflow', 'cancel', { now: NOW })
+  assert.equal(sf.patch.billing_status, 'suspended', 'sin enum de cancelación, cae a suspendida')
+  assert.equal(sf.patch.license_expires_at, '2026-06-15T12:00:00.000Z')
+
+  const cq = buildLicenseChange('cateqhub', 'cancel', { now: NOW })
+  assert.equal(cq.patch.license_status, 'access_denied')
+})
+
+test('cancel se registra como "archived" en la bitácora de puntos', () => {
+  const { log } = buildLicenseChange('puntos', 'cancel', { now: NOW })
+  assert.equal(log.row.event_type, 'archived', 'debe ser un valor del enum de LicenseEvent')
+})
+
+test('set_dates hacia atrás se registra como vencimiento, no como renovación', () => {
+  const back = buildLicenseChange('puntos', 'set_dates', { expiryDate: '2026-01-01', now: NOW })
+  assert.equal(back.log.row.event_type, 'license_expired')
+  const fwd = buildLicenseChange('puntos', 'set_dates', { expiryDate: '2026-12-01', now: NOW })
+  assert.equal(fwd.log.row.event_type, 'license_renewed')
+})

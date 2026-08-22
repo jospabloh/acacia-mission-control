@@ -17,6 +17,7 @@ import members from '../_lib/control/members.js'
 import sessions from '../_lib/control/sessions.js'
 import sessionRevoke from '../_lib/control/session-revoke.js'
 import licenseDeletePremiumData from '../_lib/control/license-delete-premium-data.js'
+import licenseRecord from '../_lib/control/license-record.js'
 import paymentReport from '../_lib/control/payment-report.js'
 import paymentConfirm from '../_lib/control/payment-confirm.js'
 
@@ -32,6 +33,7 @@ const ROUTES = {
   'sessions': sessions,
   'session-revoke': sessionRevoke,
   'license-delete-premium-data': licenseDeletePremiumData,
+  'license-record': licenseRecord,
   'payment-report': paymentReport,
   'payment-confirm': paymentConfirm,
 }

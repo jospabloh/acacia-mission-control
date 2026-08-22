@@ -31,6 +31,27 @@ export function licenseAction(appId, licenseExternalId, op, plan, opts = {}) {
   return postControl('/api/control/license-action', { appId, licenseExternalId, op, plan, ...opts })
 }
 
+// WRITE: escribe a mano el vencimiento y/o el fin de prueba de una licencia
+// (YYYY-MM-DD). `alsoActivate` además la reactiva. Se aplica en la app.
+export function licenseSetDates(appId, licenseExternalId, { expiryDate, trialEndsAt, alsoActivate } = {}) {
+  return postControl('/api/control/license-action', {
+    appId, licenseExternalId, op: 'set_dates', expiryDate, trialEndsAt, alsoActivate,
+  })
+}
+
+// WRITE: da de baja la licencia — la cancela en la app (estado terminal +
+// vencimiento hoy) y archiva el renglón para que salga del panel.
+export function licenseCancel(appId, licenseExternalId, reason) {
+  return postControl('/api/control/license-action', { appId, licenseExternalId, op: 'cancel', reason })
+}
+
+// WRITE, solo bodega: archiva / restaura / borra el RENGLÓN del panel, sin
+// tocar la app. `purge` requiere rol owner y el sync la vuelve a traer si el
+// registro sigue vivo en la app.
+export function licenseRecord(appId, licenseExternalId, op, reason) {
+  return postControl('/api/control/license-record', { appId, licenseExternalId, op, reason })
+}
+
 // WRITE, destructiva: borra los datos Premium (Tutores) de un tenant, solo si
 // ya confirmó su propia exportación (el servidor lo revalida, no confía en el
 // cliente). Requiere rol owner y escribir el nombre exacto de la parroquia.
