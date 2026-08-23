@@ -6,7 +6,13 @@ import crypto from 'node:crypto'
 import { supabaseAdmin } from './_lib/supabaseAdmin.js'
 
 const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
-const SALT = process.env.TRACK_SALT || process.env.INGEST_HMAC_SECRET || 'acacia-track'
+// Salt for hashing visitor IPs — NOT an auth secret, and deliberately no
+// longer falling back to INGEST_HMAC_SECRET. That fallback coupled two
+// unrelated things: rotating the bridge secret would silently change every IP
+// hash and break unique-visitor counting, and an auth secret has no business
+// being a hashing salt. Set TRACK_SALT; without it this degrades to a fixed
+// literal, which still de-duplicates within a deployment.
+const SALT = process.env.TRACK_SALT || 'acacia-track'
 
 function clientIp(req) {
   const xf = req.headers['x-forwarded-for']
