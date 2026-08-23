@@ -10,6 +10,7 @@ import { bridgeConfigured } from '../_lib/appBridge.js'
 import { messagingFor } from '../_lib/messaging.js'
 import { resolveRecipients, sendFollowup } from '../_lib/emailFollowup.js'
 import { qualifiesForUsageReminder, usagePeriodKey, HAS_NATIVE_REENGAGEMENT } from '../_lib/usageReminders.js'
+import { requireCron } from '../_lib/requireCron.js'
 
 async function runUsageReminders(now) {
   if (!bridgeConfigured()) return { skipped: 'bridge not configured', apps: [] }
@@ -85,11 +86,8 @@ async function runUsageReminders(now) {
 }
 
 export default async function handler(req, res) {
-  // Mismo gate que los demás crons: CRON_SECRET (Bearer) o header de Vercel cron.
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
-    return res.status(401).json({ error: 'unauthorized' })
-  }
+  // Machine-only, fails closed — see api/_lib/requireCron.js.
+  if (!requireCron(req, res)) return
   if (!requireSupabase(res)) return
 
   try {

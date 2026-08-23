@@ -289,23 +289,52 @@ por el puente — «a forged body can't inject a ticket». O se deriva una llave
 app (`HMAC(maestro, slug)`), de modo que una firma sólo valga para la app que
 dice ser, o `ticket.js` re-lee el registro como hace su vecino.
 
-#### Hallazgo 2 — la puerta de los crons es condicional, no cerrada
+#### Hallazgo 2 — los cuatro crons estaban ABIERTOS en producción (medido, y arreglado aquí)
 
-`api/cron/sync.js:19`:
+Los cuatro llevaban esta puerta, copiada en línea:
 
 ```js
 if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
 ```
 
-Si `CRON_SECRET` no está puesto, **no hay puerta**: un POST anónimo dispara el
-ciclo de vida de licencias de todo el portafolio. Es el patrón contrario al de
-`radar`, `rumbo` y `stockflow`, cuyas funciones de plataforma responden 403
-cuando el secreto falta.
+Con `CRON_SECRET` sin poner, el `secret &&` de delante salta la comprobación
+entera. **Y no estaba puesto.** La primera versión de esta sección decía «no
+pude comprobar si la variable está puesta» porque el proxy del sandbox no
+alcanza el dominio; después probé por el MCP de Vercel, que sí llega. Un GET
+anónimo, sin cabecera ninguna, a
+`https://acacia-mission-control.vercel.app/api/cron/sync`:
 
-**No pude comprobar si la variable está puesta** — la salida HTTPS de este
-sandbox no alcanza el dominio (una sonda devolvió `000`). Y nada en el repo ni
-en CI afirma que exista. Un guardia condicional vale exactamente lo que valga
-esa variable, y ahora mismo nadie lo está verificando.
+```
+200 OK
+{"ok":true,"apps":34,"day":"2026-08-23","summary":[{"app":"puntos", … }]}
+```
+
+Corrió el sync completo **y devolvió en el cuerpo el estado operativo de todo
+el portafolio**: las 34 apps, cuántos inquilinos y licencias tiene cada una,
+cuántos tickets, cuántas sesiones, la latencia de cada health. Eso no es sólo un
+disparador expuesto: es una fuga de datos a cualquiera que sepa la URL.
+
+Y la misma puerta ausente estaba delante de `license-lifecycle`,
+`renewal-reminders` y `usage-reminders` — los que transicionan `billing_status`
+y **mandan correo a clientes reales**. Esos no los probé, por razones obvias; no
+hace falta, el gate es el mismo y ya está demostrado que no cierra.
+
+**Arreglado en este commit.** `api/_lib/requireCron.js` reemplaza las cuatro
+copias en línea y **falla cerrado**: sin `CRON_SECRET` responde 503, nunca 200.
+No acepta `x-vercel-cron` por sí solo —las cabeceras las controla quien llama—;
+con la variable puesta, Vercel adjunta `Authorization: Bearer <CRON_SECRET>` a
+sus invocaciones programadas por su cuenta, así que el planificador entra por la
+misma puerta que todos.
+
+**Hay que poner `CRON_SECRET` en Vercel ANTES de desplegar esto**, o los cuatro
+crons responden 503 y dejan de correr en silencio. Es la dirección segura del
+fallo, pero sigue siendo una caída — y es exactamente el error que flowfin
+documenta en su CLAUDE.md, cometido en el sentido contrario.
+
+La lección general, y es la misma que la de radar unas horas antes: **un
+guardia condicional vale lo que valga su variable de entorno, y nadie estaba
+verificando la variable.** `radar`, `rumbo` y `stockflow` ya fallaban cerrado en
+la misma situación; esto los alcanza.
 
 #### Una cosa anotada
 
@@ -319,5 +348,12 @@ segundo `admin` es justo la bitácora que lo audita.
 **1 `members`** (rol `owner`), 34 filas en `apps`, **20 `tenants`** y 5
 `tickets`. Con un solo operador no hay forma de ejercer el modelo de roles: no
 existe un `viewer` ni un `admin` contra el que comprobar que la RLS los frena de
-verdad. Eso, y si `CRON_SECRET` está configurado en Vercel, es lo que queda
-fuera de esta pasada.
+verdad. Eso es lo único que queda fuera de esta pasada.
+
+El hallazgo 2 **sí** se verificó contra producción, y merece la pena decir cómo,
+porque el método sirve para la próxima: el proxy de este sandbox no alcanza el
+dominio, así que el primer intento devolvió `000` y lo di por no verificable.
+El MCP de Vercel sí llega. **Que una vía esté bloqueada no significa que la
+pregunta no tenga respuesta** — vale la pena buscar la segunda vía antes de
+escribir "no verificado", que es justo lo que este módulo existe para no
+hacer a la ligera.

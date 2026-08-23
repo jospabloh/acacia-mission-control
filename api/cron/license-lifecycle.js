@@ -24,6 +24,7 @@ import { messagingFor } from '../_lib/messaging.js'
 import { resolveRecipients, sendFollowup } from '../_lib/emailFollowup.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { computePortfolioLifecycleStage, emailKindForStage, filterPaidLicenses, shouldDowngradeToFree, weekBucketKey } from '../_lib/portfolioLifecycle.js'
+import { requireCron } from '../_lib/requireCron.js'
 
 async function runLifecycleForApp(app, cfg, byId, msgCfg, week, now, contactsError) {
   const row = { app: app.id, transitioned: 0, downgradedToFree: 0, reminded: 0, transitionFailed: 0, emailFailed: 0, enforcementGap: 0 }
@@ -170,11 +171,8 @@ async function runLicenseLifecycle(now) {
 }
 
 export default async function handler(req, res) {
-  // Mismo gate que los demás crons: CRON_SECRET (Bearer) o header de Vercel cron.
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
-    return res.status(401).json({ error: 'unauthorized' })
-  }
+  // Machine-only, fails closed — see api/_lib/requireCron.js.
+  if (!requireCron(req, res)) return
   if (!requireSupabase(res)) return
 
   try {

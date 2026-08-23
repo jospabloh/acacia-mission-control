@@ -17,6 +17,7 @@ import {
   currentPeriodKey, qualifiesForReminder, reminderKindFor, shouldAutoRenew,
   qualifiesForUpcomingReminder, upcomingPeriodKey,
 } from '../_lib/renewalReminders.js'
+import { requireCron } from '../_lib/requireCron.js'
 
 const DAY = 86_400_000
 
@@ -176,11 +177,8 @@ async function runUpcomingReminders(now) {
 }
 
 export default async function handler(req, res) {
-  // Mismo gate que el cron de sync: CRON_SECRET (Bearer) o header de Vercel cron.
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
-    return res.status(401).json({ error: 'unauthorized' })
-  }
+  // Machine-only, fails closed — see api/_lib/requireCron.js.
+  if (!requireCron(req, res)) return
   if (!requireSupabase(res)) return
 
   // Dos schedules de vercel.json apuntan a este mismo archivo (mismo cupo de
