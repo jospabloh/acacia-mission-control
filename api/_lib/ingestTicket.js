@@ -1,9 +1,16 @@
 // Shared core for real-time ticket ingest, used by BOTH ingest paths:
-//   - api/ingest/ticket.js      — push: the app POSTs the signed record (the 3
-//     apps that can host the notifyTicketCreated function).
+//   - api/ingest/ticket.js      — push: the app POSTs the signed record. Four
+//     apps host a signer: puntos, liuma and radar in a notifyTicketCreated
+//     function, rumbo inline in submitTicket (which creates the ticket anyway).
 //   - api/ingest/ticket-pull.js — pull: the app's frontend just pings MC with a
 //     ticket id and MC reads the authoritative record via the acaciaControl
-//     bridge (the apps that hit Base44's 50-function cap and can't host a new fn).
+//     bridge. Five apps: cateqhub, flowfin, stockflow, ctrlhq and kitchops.
+//     flowfin and stockflow sit at Base44's function cap and could not host a
+//     signer; ctrlhq and kitchops simply have no reason to, since this path
+//     needs no secret in the browser and MC re-reads the real record anyway.
+// All nine notify in real time. Before 2026-08-23 ctrlhq and kitchops did
+// neither, so their tickets waited for the 08:00 UTC sync — up to 23 hours
+// before support saw a customer's message.
 // Either way the record lands here and gets the identical treatment: upsert into
 // the bodega (source='push'), SLA anchored to the customer's creation instant,
 // and ONE notification fan-out guarded by notified_at.

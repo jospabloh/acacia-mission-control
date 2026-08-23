@@ -1,11 +1,18 @@
-// Per-app support-ticket model. Only three portfolio apps persist tickets:
-//   - puntos & liuma: a SupportTicket header + a SEPARATE SupportTicketMessage
-//     thread entity (author_role marks staff vs customer).
+// Per-app support-ticket model. ALL NINE portfolio apps persist tickets and are
+// configured here. Two conversation shapes:
+//   - eight apps (puntos, stockflow, flowfin, cateqhub, radar, liuma, ctrlhq,
+//     kitchops): a SupportTicket header + a SEPARATE SupportTicketMessage thread
+//     entity (author_role marks staff vs customer) — `mode: 'message'`.
 //   - rumbo: a SupportTicket whose conversation lives INLINE in a `responses[]`
-//     array on the ticket itself (no message entity).
-// stockflow's "support" is a fire-and-forget email (no entity) and flowfin has
-// none — so neither appears here. Mission Control owns this mapping; the bridge
-// (tickets.list / tickets.thread / tickets.update) stays generic.
+//     array on the ticket itself, no message entity — `mode: 'inline'`.
+// Mission Control owns this mapping; the bridge (tickets.list / tickets.thread /
+// tickets.update) stays generic.
+//
+// This header used to say only three apps persisted tickets, that stockflow's
+// support was a fire-and-forget email and that flowfin had none. That stopped
+// being true as the apps were brought up to Module 8, and the comment did not
+// follow — worth naming, because a stale comment about WHO IS COVERED is the
+// kind that gets trusted instead of the config right below it.
 //
 // Fields verified against each app's source (SupportTicket / SupportTicketMessage
 // entities + their support UIs), 2026-06.
