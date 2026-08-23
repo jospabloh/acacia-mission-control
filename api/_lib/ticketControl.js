@@ -2,9 +2,9 @@
 // configured here. Two conversation shapes:
 //   - eight apps (puntos, stockflow, flowfin, cateqhub, radar, liuma, ctrlhq,
 //     kitchops): a SupportTicket header + a SEPARATE SupportTicketMessage thread
-//     entity (author_role marks staff vs customer) — `mode: 'message'`.
+//     entity (author_role marks staff vs customer) — `thread.mode: 'message'`.
 //   - rumbo: a SupportTicket whose conversation lives INLINE in a `responses[]`
-//     array on the ticket itself, no message entity — `mode: 'inline'`.
+//     array on the ticket itself, no message entity — `thread.mode: 'inline'`.
 // Mission Control owns this mapping; the bridge (tickets.list / tickets.thread /
 // tickets.update) stays generic.
 //
