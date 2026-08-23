@@ -229,3 +229,95 @@ portafolio llegó a desplegar eran **sintácticamente válidos**: la rama de rol
 motor descartaba la cláusula hermana de `user_condition`, los campos de licencia
 escribibles por el propio inquilino en puntos y rumbo, y el `PermissionProfile`
 que ningún RLS puede consultar porque vive en otra fila.
+
+### Resultado — 2026-08-23, contra la base de datos desplegada
+
+Aquí el módulo 14 pregunta otra cosa, y conviene decirlo antes de responderlo.
+Mission Control **no** es multi-inquilino en el sentido del resto del
+portafolio: todo operador ve todas las apps, y eso es el producto, no un fallo.
+Las dos preguntas que sí aplican son (a) si el modelo de roles de operador
+aguanta, y (b) si **las apps siguen separadas entre sí** al otro lado del
+puente — porque la bodega guarda los datos de 20 inquilinos de 10 apps, y quien
+confunda una con otra los mezcla aquí.
+
+Todo lo de abajo se leyó de la **base viva** (`pg_policies`, `pg_proc`), no de
+los `.sql` de `supabase/migrations/`.
+
+#### La bodega está bien
+
+Las **19 tablas** tienen RLS activo y al menos una política. La forma es
+uniforme y coincide con el modelo que este archivo documenta: lectura
+`is_member_at_least('viewer')`, escritura `admin`, y `owner` para `members`,
+para borrar `apps` y para borrar `audit_actions`. `audit_actions` además exige
+`admin` para **leer**, no `viewer`.
+
+`current_member_role()` e `is_member_at_least()` son `SECURITY DEFINER` **con
+`search_path` fijado a `public`**. Eso importa: un `SECURITY DEFINER` con
+search_path mutable es la vía clásica de escalada en Postgres, y aquí está
+cerrada.
+
+Las **17 handlers de `api/_lib/control/`** pasan por `requireMember` con el
+nivel correcto: `owner` para `members`, `payment-confirm`,
+`license-delete-premium-data` y el `purge` de `license-record`; `admin` para el
+resto de escrituras; `viewer` para `usage-by-tenant`, `email-status` y el hilo
+de un ticket. No hay una sola sin puerta (las tres que salen sin ella en un
+grep son sus `.test.js`).
+
+#### Hallazgo 1 — un solo secreto para N apps, y la atribución viaja en el cuerpo
+
+`INGEST_HMAC_SECRET` es **un único valor compartido** por todo el portafolio;
+`appBridge.js` lo dice en su cabecera y lo repite al registrar un error
+(«INGEST_HMAC_SECRET is one shared value signed against N per-app functions»).
+
+En `api/ingest/ticket.js:25‑27` la firma cubre `{app, record}`, así que nadie
+puede manipular el cuerpo **en tránsito**. Pero la llave que firma es la misma
+en las diez apps. Entonces la firma demuestra «alguien que tiene el secreto
+compartido», nunca «esto viene de la app X»: **cualquier app puede firmar un
+`record` diciendo `app: 'otra'`**, y Mission Control ejecuta
+`processIncomingTicket({ app, record })` y escribe un ticket falso atribuido a
+esa otra app.
+
+No es un agujero para un extraño —quien tiene el secreto son las propias apps de
+ACACIA—; es un problema de **radio de daño**: el día que se filtre el secreto de
+*una* app, se filtró el de las diez, y ese mismo valor es además el bearer que
+aceptan varios `health` y el que autoriza `license.set` en `acaciaControl`.
+
+**El arreglo ya está escrito, un archivo más allá.** `api/ingest/ticket-pull.js`
+resuelve el mismo problema mejor y explica por qué: no lleva firma ninguna,
+recibe sólo `{app, ticketId}` y va a **leer el registro auténtico de la app**
+por el puente — «a forged body can't inject a ticket». O se deriva una llave por
+app (`HMAC(maestro, slug)`), de modo que una firma sólo valga para la app que
+dice ser, o `ticket.js` re-lee el registro como hace su vecino.
+
+#### Hallazgo 2 — la puerta de los crons es condicional, no cerrada
+
+`api/cron/sync.js:19`:
+
+```js
+if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
+```
+
+Si `CRON_SECRET` no está puesto, **no hay puerta**: un POST anónimo dispara el
+ciclo de vida de licencias de todo el portafolio. Es el patrón contrario al de
+`radar`, `rumbo` y `stockflow`, cuyas funciones de plataforma responden 403
+cuando el secreto falta.
+
+**No pude comprobar si la variable está puesta** — la salida HTTPS de este
+sandbox no alcanza el dominio (una sonda devolvió `000`). Y nada en el repo ni
+en CI afirma que exista. Un guardia condicional vale exactamente lo que valga
+esa variable, y ahora mismo nadie lo está verificando.
+
+#### Una cosa anotada
+
+`audit_delete_owner` permite a un `owner` borrar filas de `audit_actions`. Con
+un solo operador es una decisión de diseño, no una fuga; pero una bitácora que
+el rol más alto puede borrar conviene nombrarla, porque el día que haya un
+segundo `admin` es justo la bitácora que lo audita.
+
+#### Estado vivo y lo que no pude verificar
+
+**1 `members`** (rol `owner`), 34 filas en `apps`, **20 `tenants`** y 5
+`tickets`. Con un solo operador no hay forma de ejercer el modelo de roles: no
+existe un `viewer` ni un `admin` contra el que comprobar que la RLS los frena de
+verdad. Eso, y si `CRON_SECRET` está configurado en Vercel, es lo que queda
+fuera de esta pasada.
