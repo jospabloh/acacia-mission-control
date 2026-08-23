@@ -8,7 +8,7 @@
 // the pull variant (ticket-pull.js, for apps that can't host a function) gives
 // the identical treatment. Here we just verify the signature and resolve the app.
 import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { verify } from '../_lib/ingestSign.js'
+import { verifyFrom } from '../_lib/ingestSign.js'
 import { isTicketMappable } from '../_lib/sync/ticketMapping.js'
 import { ticketControlFor } from '../_lib/ticketControl.js'
 import { processIncomingTicket } from '../_lib/ingestTicket.js'
@@ -24,7 +24,15 @@ export default async function handler(req, res) {
 
   const { app: appId, record, ts, sig } = req.body ?? {}
   if (!appId || !record || !ts || !sig) return res.status(400).json({ error: 'falta app/record/ts/sig' })
-  if (!verify({ secret, ts, action: ACTION, params: { app: appId, record }, sig })) {
+  // The slug selects the key, which is the whole point: a body that NAMES
+  // another app is checked against that app's derived key, so relabelling one
+  // app's push as another's no longer verifies. Before this, every app signed
+  // with the same master, so the `app` field here was an unverified claim and
+  // any app could write a ticket under any other app's name (module-14 audit,
+  // 2026-08-23). Still accepts a legacy master signature while
+  // ACCEPT_LEGACY_MASTER is true — see ingestSign.js for why, and for what
+  // flipping it finishes.
+  if (!verifyFrom({ master: secret, slug: appId, ts, action: ACTION, params: { app: appId, record }, sig })) {
     return res.status(401).json({ error: 'firma inválida' })
   }
   if (!isTicketMappable(record)) return res.status(400).json({ error: 'record sin id' })

@@ -21,6 +21,26 @@ export async function callBridge(app, action, params = {}) {
   // different string and rejects the signature (e.g. license.set with no `log`).
   const clean = JSON.parse(JSON.stringify(params ?? {}))
   const ts = Date.now().toString()
+  // STILL SIGNED WITH THE MASTER, deliberately, and this is the one place in
+  // the migration where the order is forced.
+  //
+  // Mission Control deploys automatically on merge; the nine apps deploy by
+  // hand. So MC is always first. In this direction MC signs and the app
+  // verifies — if MC started signing with the derived key before the apps
+  // could accept it, every acaciaControl call would fail from the merge until
+  // the last app was deployed: licences, tickets, usage and health for the
+  // whole portfolio, dark. The inbound direction is safe either way because
+  // MC's verifier accepts both (see verifyFrom).
+  //
+  // Nor is this direction where the vulnerability lives: MC picks the
+  // destination by appId, not by signature, so it cannot be tricked into
+  // talking to the wrong app. The hole is inbound — apps signing with a shared
+  // key — and it closes when the apps sign derived and ACCEPT_LEGACY_MASTER
+  // goes false.
+  //
+  // STEP 2, once all nine apps are deployed: swap this for
+  //   signFor({ master: secret, slug: app.id, ts, action, params: clean })
+  // and flip ACCEPT_LEGACY_MASTER to false here and in every app.
   const sig = sign({ secret, ts, action, params: clean })
 
   const client = createClient({ appId: app.external_id, serverUrl: process.env.BASE44_SERVER_URL || undefined })

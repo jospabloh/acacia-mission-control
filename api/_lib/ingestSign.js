@@ -30,3 +30,53 @@ export function verify({ secret, ts, action, params, sig, maxSkewMs = 300000, no
   const b = Buffer.from(String(sig), 'hex')
   return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
+
+// ── Per-app key derivation ────────────────────────────────────────────────
+//
+// CANONICAL SOURCE for this half: `jospabloh/acacia-app-standard` →
+// `shared/bridge/acaciaSign.ts` is the Deno twin every app carries. The two
+// implementations must agree byte for byte; `ingestSign.test.js` pins the same
+// test vector on both sides, because a disagreement shows up only as "bad
+// signature" at runtime and looks like a config problem, not a code one.
+//
+// `INGEST_HMAC_SECRET` is ONE value shared by the whole portfolio, so a
+// signature made with it proves "someone holding the shared secret", never
+// "this is app X" — which is exactly how a ticket could be pushed under
+// another app's name (module-14 audit, 2026-08-23). Signing with a key derived
+// from the master AND the app's slug makes a signature only valid for the app
+// it claims to be.
+const APP_KEY_PREFIX = 'acacia.app.v1.'
+
+// While true, `verifyFrom` also accepts a signature made with the bare master,
+// so Mission Control and the nine apps can deploy in any order instead of the
+// bridge going dark between the first deploy and the last. Flip to false in
+// BOTH this file and every app's `_acaciaSign.ts` once the rollout is done —
+// that flip is what actually closes the cross-attribution hole.
+export const ACCEPT_LEGACY_MASTER = true
+
+/** This app's bridge key. `slug` is `apps.id` in the bodega. */
+export function deriveAppKey(master, slug) {
+  return crypto.createHmac('sha256', master).update(`${APP_KEY_PREFIX}${slug}`).digest('hex')
+}
+
+/** Sign a body as Mission Control talking TO `slug`. */
+export function signFor({ master, slug, ts, action, params }) {
+  return sign({ secret: deriveAppKey(master, slug), ts, action, params })
+}
+
+/**
+ * Verify a body that claims to come FROM `slug`. The slug is what selects the
+ * key, so a payload naming another app is checked against that app's key and
+ * fails unless the sender actually holds it.
+ */
+export function verifyFrom({ master, slug, ts, action, params, sig, maxSkewMs, now }) {
+  if (!master || !slug) return false
+  const args = { ts, action, params, sig, maxSkewMs, now }
+  if (verify({ secret: deriveAppKey(master, slug), ...args })) return true
+  return ACCEPT_LEGACY_MASTER ? verify({ secret: master, ...args }) : false
+}
+
+/** The bearer form, for endpoints with no body to sign (an app's `health`). */
+export function bearerFor(master, slug) {
+  return deriveAppKey(master, slug)
+}

@@ -357,3 +357,49 @@ El MCP de Vercel sí llega. **Que una vía esté bloqueada no significa que la
 pregunta no tenga respuesta** — vale la pena buscar la segunda vía antes de
 escribir "no verificado", que es justo lo que este módulo existe para no
 hacer a la ligera.
+
+## Módulo 15 — el puente: una llave derivada por app (2026-08-23)
+
+Cierra el hallazgo 1 del módulo 14 de arriba. `INGEST_HMAC_SECRET` es un solo
+valor compartido por las diez apps, así que una firma hecha con él demuestra
+«alguien tiene el secreto compartido» y nunca «esto es la app X» — y como el
+`app` viaja en el cuerpo, cualquier app podía firmar un ticket atribuido a otra.
+
+`api/_lib/ingestSign.js` gana la derivación, y es la mitad Node de
+`shared/bridge/acaciaSign.ts` en `jospabloh/acacia-app-standard` (la mitad Deno
+que llevan las nueve apps):
+
+    appKey = HMAC-SHA256(maestro, "acacia.app.v1." + slug)
+
+`deriveAppKey` / `signFor` / `verifyFrom` / `bearerFor`, más
+`ACCEPT_LEGACY_MASTER`. `api/ingest/ticket.js` ya verifica con la llave de la
+app que dice ser, así que un cuerpo firmado por otra no entra.
+`api/_lib/ingestSign.test.js` fija el mismo vector que la prueba Deno
+(`acaciaSign.test.ts`): dos implementaciones de HMAC en dos runtimes sólo siguen
+siendo iguales si algo lo afirma, y una divergencia se ve como `bad signature`
+en cada llamada, que parece un secreto mal puesto y no lo es.
+
+**`appBridge.js` sigue firmando de salida con el maestro, a propósito, y este es
+el único punto donde el orden está forzado.** Mission Control despliega al
+mergear; las nueve apps se despliegan a mano. Así que MC siempre llega primero:
+si firmara derivada hoy, cada `acaciaControl` que todavía no se ha desplegado
+respondería `bad signature` — licencias, tickets, uso y salud de todo el
+portafolio caídos hasta el último deploy. Por eso verifica derivada ya y firma
+derivada después.
+
+**El paso 2 es el que cierra el agujero, y falta:**
+
+1. poner `ACACIA_APP_SLUG` en flowfin, stockflow, cateqhub, ctrlhq y kitchops
+   (las otras cuatro ya lo tenían por el push de tickets);
+2. cambiar `appBridge.js` a `signFor({ master: secret, slug: app.id, … })`;
+3. poner `ACCEPT_LEGACY_MASTER = false` en los 11 sitios y redesplegar.
+
+Mientras el flag sea `true` una firma con el maestro se sigue aceptando, que es
+lo que hace irrelevante el orden de despliegue — y también lo que deja el
+agujero medio abierto. Grep del constante para ver quién sigue en legacy.
+
+**Y una consecuencia que casi se cuela:** `api/track.js` usaba
+`INGEST_HMAC_SECRET` como sal de respaldo para hashear IPs de visitantes, así
+que rotar el secreto del puente habría recontado en silencio cada visitante
+único. Ahora usa `TRACK_SALT`. Un secreto de autenticación autentica; cualquier
+otra cosa que necesite una cadena aleatoria estable se trae la suya.
