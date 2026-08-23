@@ -11,14 +11,11 @@ import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
 import { syncSessionsForApp } from '../_lib/sync/syncSessions.js'
 import { sweepAutoCloseForApp } from '../_lib/sweepResolvedTickets.js'
 import { probeAppHealth } from '../_lib/sync/syncHealth.js'
+import { requireCron } from '../_lib/requireCron.js'
 
 export default async function handler(req, res) {
-  // Gate: when CRON_SECRET is set, require it (Vercel sends it as a Bearer);
-  // Vercel cron requests also carry the x-vercel-cron header.
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}` && !req.headers['x-vercel-cron']) {
-    return res.status(401).json({ error: 'unauthorized' })
-  }
+  // Machine-only, fails closed — see api/_lib/requireCron.js.
+  if (!requireCron(req, res)) return
   if (!requireSupabase(res)) return
 
   const { data: apps, error } = await supabaseAdmin.from('apps').select('*')
