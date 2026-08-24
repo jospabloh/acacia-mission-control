@@ -57,31 +57,33 @@ function WebPaths({ rows, appPath }) {
       {rows.length === 0 ? (
         <p className="mt-3 text-sm text-ink-faint">Aún no hay visitas registradas.</p>
       ) : (
-        <table className="mt-4 w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
-              <th className="pb-2 font-medium">Ruta</th>
-              <th className="pb-2 text-right font-medium">Visitas</th>
-              <th className="pb-2 text-right font-medium">Visitantes</th>
-              <th className="pb-2 text-right font-medium">7 días</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.path} className="border-t border-hair">
-                <td className="py-2 pr-3">
-                  <span className="font-mono text-xs text-ink">{r.path}</span>
-                  {r.path !== appPath && (
-                    <span className="ml-2 rounded-md bg-paper-subtle px-1.5 py-0.5 text-[11px] text-ink-mute">{r.path.slice(appPath.length + 1)}</span>
-                  )}
-                </td>
-                <td className="py-2 text-right font-display font-semibold text-ink">{r.visits30.toLocaleString('es-MX')}</td>
-                <td className="py-2 text-right text-ink-mute">{r.visitors30.toLocaleString('es-MX')}</td>
-                <td className="py-2 text-right text-ink-mute">{r.visits7.toLocaleString('es-MX')}</td>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
+                <th className="pb-2 font-medium">Ruta</th>
+                <th className="pb-2 text-right font-medium">Visitas</th>
+                <th className="pb-2 text-right font-medium">Visitantes</th>
+                <th className="pb-2 text-right font-medium">7 días</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.path} className="border-t border-hair">
+                  <td className="py-2 pr-3">
+                    <span className="font-mono text-xs text-ink">{r.path}</span>
+                    {r.path !== appPath && (
+                      <span className="ml-2 rounded-md bg-paper-subtle px-1.5 py-0.5 text-[11px] text-ink-mute">{r.path.slice(appPath.length + 1)}</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right font-display font-semibold text-ink">{r.visits30.toLocaleString('es-MX')}</td>
+                  <td className="py-2 text-right text-ink-mute">{r.visitors30.toLocaleString('es-MX')}</td>
+                  <td className="py-2 text-right text-ink-mute">{r.visits7.toLocaleString('es-MX')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
