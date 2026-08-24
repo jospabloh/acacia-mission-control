@@ -3,7 +3,7 @@
 // No OAuth tokens / passwords: the only shared secret is INGEST_HMAC_SECRET,
 // stored here (Vercel) and in each Base44 app's secrets.
 import { createClient } from '@base44/sdk'
-import { sign } from './ingestSign.js'
+import { sign, signFor, ACCEPT_LEGACY_MASTER } from './ingestSign.js'
 
 const BRIDGE_FN = 'acaciaControl'
 
@@ -21,40 +21,51 @@ export async function callBridge(app, action, params = {}) {
   // different string and rejects the signature (e.g. license.set with no `log`).
   const clean = JSON.parse(JSON.stringify(params ?? {}))
   const ts = Date.now().toString()
-  // STILL SIGNED WITH THE MASTER, deliberately, and this is the one place in
-  // the migration where the order is forced.
+  // SIGNED WITH THIS APP'S DERIVED KEY, with one fallback to the master.
   //
-  // Mission Control deploys automatically on merge; the nine apps deploy by
-  // hand. So MC is always first. In this direction MC signs and the app
-  // verifies — if MC started signing with the derived key before the apps
-  // could accept it, every acaciaControl call would fail from the merge until
-  // the last app was deployed: licences, tickets, usage and health for the
-  // whole portfolio, dark. The inbound direction is safe either way because
-  // MC's verifier accepts both (see verifyFrom).
+  // All nine apps verify derived as of 2026-08-23, so the normal path is the
+  // first attempt and the fallback never runs. It exists because MC cannot read
+  // an app's Base44 secrets: if one app's ACACIA_APP_SLUG is missing or
+  // misspelled, it derives a different key, and a plain switch to derived-only
+  // signing would take that app's licences, tickets, usage and health dark with
+  // no warning. Falling back keeps it alive and — the point — NAMES it in the
+  // log, so the fix is a secret to correct rather than an outage to diagnose.
   //
-  // Nor is this direction where the vulnerability lives: MC picks the
-  // destination by appId, not by signature, so it cannot be tricked into
-  // talking to the wrong app. The hole is inbound — apps signing with a shared
-  // key — and it closes when the apps sign derived and ACCEPT_LEGACY_MASTER
-  // goes false.
+  // The retry only fires on a signature rejection. Any other bridge error
+  // (missing action, app-side 500) is returned as-is rather than doubled.
   //
-  // STEP 2, once all nine apps are deployed: swap this for
-  //   signFor({ master: secret, slug: app.id, ts, action, params: clean })
-  // and flip ACCEPT_LEGACY_MASTER to false here and in every app.
-  const sig = sign({ secret, ts, action, params: clean })
+  // This is not where the vulnerability lives: MC picks the destination by
+  // appId, not by signature, so it cannot be tricked into talking to the wrong
+  // app. The hole is inbound — apps signing with a shared key — and it closes
+  // when ACCEPT_LEGACY_MASTER goes false everywhere. Delete this fallback in
+  // the same pass: with the flag off, a wrong slug must fail, not degrade.
+  const attempts = [{ how: 'derived', sig: signFor({ master: secret, slug: app.id, ts, action, params: clean }) }]
+  if (ACCEPT_LEGACY_MASTER) attempts.push({ how: 'master', sig: sign({ secret, ts, action, params: clean }) })
 
   const client = createClient({ appId: app.external_id, serverUrl: process.env.BASE44_SERVER_URL || undefined })
-  try {
-    // verify_jwt is enforced in-function via HMAC, so no user token is needed.
-    return await client.functions.invoke(BRIDGE_FN, { action, params: clean, ts, sig })
-  } catch (e) {
-    // Surface the bridge's real error (it returns { error } with a 4xx/5xx),
-    // not the opaque axios "Request failed with status code N".
-    const message = e?.response?.data?.error || e?.message || 'bridge error'
-    // Errors like "bad signature" don't say which app — INGEST_HMAC_SECRET is one
-    // shared value signed against N per-app functions, so any one of them can drift
-    // independently. Log the app so Vercel logs alone can point at the culprit.
-    console.error(`callBridge failed: app=${app.id} (${app.name ?? app.external_id}) action=${action} error=${message}`)
-    throw new Error(message)
+  let lastMessage = 'bridge error'
+  for (const [i, attempt] of attempts.entries()) {
+    try {
+      // verify_jwt is enforced in-function via HMAC, so no user token is needed.
+      const out = await client.functions.invoke(BRIDGE_FN, { action, params: clean, ts, sig: attempt.sig })
+      if (attempt.how === 'master') {
+        console.warn(
+          `callBridge: app=${app.id} rejected the derived key and accepted the master. ` +
+          `Its ACACIA_APP_SLUG is missing or not "${app.id}". Fix that secret — once ` +
+          `ACCEPT_LEGACY_MASTER goes false this call fails instead of falling back.`,
+        )
+      }
+      return out
+    } catch (e) {
+      // Surface the bridge's real error (it returns { error } with a 4xx/5xx),
+      // not the opaque axios "Request failed with status code N".
+      lastMessage = e?.response?.data?.error || e?.message || 'bridge error'
+      const isSignature = /signature/i.test(String(lastMessage))
+      if (isSignature && i < attempts.length - 1) continue
+      // Errors like "bad signature" don't say which app on their own, so log it.
+      console.error(`callBridge failed: app=${app.id} (${app.name ?? app.external_id}) action=${action} signed=${attempt.how} error=${lastMessage}`)
+      throw new Error(lastMessage)
+    }
   }
+  throw new Error(lastMessage)
 }
