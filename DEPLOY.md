@@ -72,5 +72,10 @@ both outside this repo:
    to `https://control.acaciaco.com.mx` and add it (plus the `*.vercel.app` URL)
    to **Redirect URLs**.
 
-Until both are done, the "Continue with Google" button returns a clear message
-telling you Google isn't enabled yet; email + password keeps working meanwhile.
+Until both are done, leave `VITE_GOOGLE_OAUTH` unset — the "Continue with
+Google" button stays hidden entirely (it's off by default so production never
+shows a button that can't complete) and email + password keeps working
+meanwhile. Set `VITE_GOOGLE_OAUTH=on` (then redeploy) once both steps are done
+to reveal the button; if it's ever shown before Supabase's Google provider is
+actually enabled, clicking it surfaces a clear "Google isn't enabled yet"
+message instead of hanging or erroring uncaught.
