@@ -47,12 +47,17 @@ export function verify({ secret, ts, action, params, sig, maxSkewMs = 300000, no
 // it claims to be.
 const APP_KEY_PREFIX = 'acacia.app.v1.'
 
-// While true, `verifyFrom` also accepts a signature made with the bare master,
-// so Mission Control and the nine apps can deploy in any order instead of the
-// bridge going dark between the first deploy and the last. Flip to false in
-// BOTH this file and every app's `_acaciaSign.ts` once the rollout is done —
-// that flip is what actually closes the cross-attribution hole.
-export const ACCEPT_LEGACY_MASTER = true
+// FALSE since 2026-08-24, and that flip is what closed the cross-attribution
+// hole. `verifyFrom` now accepts ONLY the app's derived key, so an inbound
+// ticket signed with the bare master — which every app holds — is rejected
+// instead of being written under whatever `app` its body claimed.
+//
+// While it was true, MC and the nine apps could deploy in any order without
+// the bridge going dark. It was flipped once that was no longer needed: all
+// nine were synced one by one on 2026-08-24 and every call verified derived on
+// the first attempt, with no fallback. Keep this in sync with every app's
+// `_acaciaSign.ts` (canonical: acacia-app-standard → shared/bridge/).
+export const ACCEPT_LEGACY_MASTER = false
 
 /** This app's bridge key. `slug` is `apps.id` in the bodega. */
 export function deriveAppKey(master, slug) {

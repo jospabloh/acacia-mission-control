@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { stableStringify, sign, verify, deriveAppKey, signFor, verifyFrom, bearerFor } from './ingestSign.js'
+import { stableStringify, sign, verify, deriveAppKey, signFor, verifyFrom, bearerFor, ACCEPT_LEGACY_MASTER } from './ingestSign.js'
 
 test('stableStringify is key-order independent', () => {
   assert.equal(stableStringify({ b: 1, a: 2 }), stableStringify({ a: 2, b: 1 }))
@@ -57,14 +57,30 @@ test('signFor/verifyFrom round-trip for the same slug', () => {
 })
 
 // The whole point of the change: a body signed by one app and relabelled as
-// another must not verify. With ACCEPT_LEGACY_MASTER still true this passes
-// only because the signature was made with a DERIVED key — a legacy signature
-// made with the bare master would still be accepted for any slug, which is
-// why the flip to false is what actually closes the hole.
+// another must not verify.
 test('a signature from one app does not verify as another', () => {
   const args = { ts: Date.now(), action: 'ticket.ingest', params: { a: 1 } }
   const sig = signFor({ master: 'm', slug: 'puntos', ...args })
   assert.equal(verifyFrom({ master: 'm', slug: 'liuma', ...args, sig }), false)
+})
+
+// And the assertion that was missing while the flag was true — the one that
+// actually closes the hole. Every app holds the master, so as long as a
+// master-signed body verified for ANY slug, relabelling still worked no matter
+// what the test above proved about derived keys.
+test('a signature made with the bare master is rejected for any slug', () => {
+  const args = { ts: Date.now(), action: 'ticket.ingest', params: { app: 'puntos' } }
+  const legacy = sign({ secret: 'm', ...args })
+  assert.equal(ACCEPT_LEGACY_MASTER, false, 'the flip is the fix; do not turn this back on')
+  assert.equal(verifyFrom({ master: 'm', slug: 'puntos', ...args, sig: legacy }), false)
+  assert.equal(verifyFrom({ master: 'm', slug: 'liuma', ...args, sig: legacy }), false)
+})
+
+// A missing slug must fail too, rather than degrade to the shared master —
+// otherwise "forgot to set ACACIA_APP_SLUG" silently reopens the hole.
+test('no slug fails instead of falling back to the master', () => {
+  const args = { ts: Date.now(), action: 'ticket.ingest', params: { a: 1 } }
+  assert.equal(verifyFrom({ master: 'm', slug: '', ...args, sig: sign({ secret: 'm', ...args }) }), false)
 })
 
 test('bearerFor is the derived key, so health differs per app', () => {
