@@ -15,3 +15,6 @@ dist-ssr
 # Playwright smoke-test output (tests/smoke) — local run artefacts
 test-results/
 playwright-report/
+
+# Subagent-driven-development scratch (task briefs, reports, review packages)
+.superpowers/
