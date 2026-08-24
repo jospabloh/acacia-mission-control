@@ -1,6 +1,8 @@
+// src/pages/CRM.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import { Badge, FilterChips } from '../components/ui.jsx'
 
 const PIPELINE = ['new', 'contacted', 'qualified', 'won', 'lost']
 const STATUS_LABEL = { new: 'Nuevo', contacted: 'Contactado', qualified: 'Calificado', won: 'Ganado', lost: 'Perdido' }
@@ -11,15 +13,27 @@ const STATUS_STYLE = {
   won: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
   lost: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
 }
+// `type` distinguishes a Soporte a Apps submission (acaciaco-site) from an
+// ordinary sales lead (`null` — the table's original and only meaning).
+const TYPE_LABEL = { soporte: 'Soporte', mejora: 'Mejora', idea: 'Idea / app nueva' }
+const TYPE_TONE = { soporte: 'bad', mejora: 'info', idea: 'ok' }
+const TYPE_FILTERS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'sales', label: 'Ventas' },
+  { value: 'soporte', label: 'Soporte' },
+  { value: 'mejora', label: 'Mejora' },
+  { value: 'idea', label: 'Idea / app nueva' },
+]
 
 export function CRM() {
   const [rows, setRows] = useState(null)
   const [busy, setBusy] = useState(null)
   const [flash, setFlash] = useState(null)
+  const [typeFilter, setTypeFilter] = useState('all')
 
   function load() {
     return supabase.from('leads')
-      .select('id, source, name, email, phone, app_interest, message, status, created_at')
+      .select('id, source, name, email, phone, app_interest, message, status, type, created_at')
       .order('created_at', { ascending: false })
       .limit(300)
       .then(({ data, error }) => { if (error) console.error(error.message); setRows(data ?? []) })
@@ -46,6 +60,20 @@ export function CRM() {
     return { total: r.length, fresh, won: byStatus.won ?? 0, open: (byStatus.new ?? 0) + (byStatus.contacted ?? 0) + (byStatus.qualified ?? 0), byStatus }
   }, [rows])
 
+  const typeOptions = useMemo(() => {
+    const r = rows ?? []
+    const counts = { all: r.length, sales: 0, soporte: 0, mejora: 0, idea: 0 }
+    for (const l of r) counts[l.type ?? 'sales'] = (counts[l.type ?? 'sales'] ?? 0) + 1
+    return TYPE_FILTERS.map((f) => ({ ...f, count: counts[f.value] ?? 0 }))
+  }, [rows])
+
+  const filteredRows = useMemo(() => {
+    const r = rows ?? []
+    if (typeFilter === 'all') return r
+    if (typeFilter === 'sales') return r.filter((l) => !l.type)
+    return r.filter((l) => l.type === typeFilter)
+  }, [rows, typeFilter])
+
   if (rows === null) return (<div><PageHeader title="CRM" /><p className="text-sm text-ink-mute">Cargando…</p></div>)
 
   return (
@@ -60,16 +88,20 @@ export function CRM() {
         <StatCard label="Perdidos" value={kpis.byStatus.lost ?? 0} />
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-xl border border-hair bg-paper-card">
+      <div className="mt-6">
+        <FilterChips options={typeOptions} value={typeFilter} onChange={setTypeFilter} ariaLabel="Filtrar por tipo" />
+      </div>
+
+      <div className="mt-3 overflow-x-auto rounded-xl border border-hair bg-paper-card">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
             <tr>
-              <th className="px-4 py-3">Lead</th><th className="px-4 py-3">Interés</th><th className="px-4 py-3">Origen</th>
-              <th className="px-4 py-3">Fecha</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Mover a</th>
+              <th className="px-4 py-3">Lead</th><th className="px-4 py-3">Interés</th><th className="px-4 py-3">Tipo</th>
+              <th className="px-4 py-3">Origen</th><th className="px-4 py-3">Fecha</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Mover a</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {filteredRows.map((r) => (
               <tr key={r.id} className="border-b border-hair last:border-0 align-top">
                 <td className="px-4 py-3">
                   <div className="font-medium text-ink">{r.name ?? '—'}</div>
@@ -77,6 +109,7 @@ export function CRM() {
                   {r.message && <div className="mt-1 max-w-xs truncate text-xs text-ink-mute" title={r.message}>{r.message}</div>}
                 </td>
                 <td className="px-4 py-3 text-ink-soft">{r.app_interest ?? '—'}</td>
+                <td className="px-4 py-3">{r.type ? <Badge tone={TYPE_TONE[r.type] ?? 'neutral'}>{TYPE_LABEL[r.type] ?? r.type}</Badge> : <span className="text-ink-faint">Venta</span>}</td>
                 <td className="px-4 py-3 text-ink-faint">{r.source ?? '—'}</td>
                 <td className="px-4 py-3 text-ink-soft">{r.created_at ? new Date(r.created_at).toLocaleDateString('es-MX') : '—'}</td>
                 <td className="px-4 py-3"><span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? 'bg-paper-subtle text-ink-mute'}`}>{STATUS_LABEL[r.status] ?? r.status ?? '—'}</span></td>
@@ -89,8 +122,8 @@ export function CRM() {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-4 text-ink-faint">Sin leads aún. Conecta el formulario de acaciaco.com.mx al endpoint <code className="font-mono text-ink">/api/ingest/lead</code> y entrarán aquí.</td></tr>
+            {filteredRows.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-4 text-ink-faint">{rows.length === 0 ? <>Sin leads aún. Conecta el formulario de acaciaco.com.mx al endpoint <code className="font-mono text-ink">/api/ingest/lead</code> y entrarán aquí.</> : 'Sin resultados para este filtro.'}</td></tr>
             )}
           </tbody>
         </table>
