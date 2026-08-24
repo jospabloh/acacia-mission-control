@@ -2,7 +2,12 @@
 // a lead here; it lands in the bodega's `leads` table (status 'new') for the CRM
 // pillar. Validated + length-capped; CORS-open (it's a public form target). If
 // INGEST_LEAD_SECRET is set, an `x-lead-secret` header must match.
+//
+// `type` ('soporte'|'mejora'|'idea') is optional — omitted, it's an ordinary
+// sales lead same as always. Set by acaciaco-site's Soporte a Apps form
+// (Fase 1, docs/superpowers/specs/2026-08-24-soporte-apps-design.md there).
 import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
+import { normalizeLeadType } from '../_lib/leadType.js'
 
 const cap = (v, n) => (v == null ? null : String(v).slice(0, n))
 const looksEmail = (e) => typeof e === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)
@@ -29,6 +34,7 @@ export default async function handler(req, res) {
     phone: cap(b.phone, 40),
     app_interest: cap(b.app_interest ?? b.interest, 80),
     message: cap(b.message, 4000),
+    type: normalizeLeadType(b.type),
     status: 'new',
     raw: typeof b === 'object' ? b : {},
   }
