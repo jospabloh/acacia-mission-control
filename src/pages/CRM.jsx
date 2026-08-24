@@ -3,6 +3,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { Badge, FilterChips } from '../components/ui.jsx'
+// `type` distinguishes a Soporte a Apps submission (acaciaco-site) from an
+// ordinary sales lead (`null` — the table's original and only meaning). The
+// vocabulary + its presentation live in one place, drift-guarded against
+// api/_lib/leadType.js — see src/lib/leadTypes.js.
+import { TYPE_LABEL, TYPE_TONE, TYPE_FILTERS } from '../lib/leadTypes.js'
 
 const PIPELINE = ['new', 'contacted', 'qualified', 'won', 'lost']
 const STATUS_LABEL = { new: 'Nuevo', contacted: 'Contactado', qualified: 'Calificado', won: 'Ganado', lost: 'Perdido' }
@@ -13,17 +18,6 @@ const STATUS_STYLE = {
   won: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
   lost: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
 }
-// `type` distinguishes a Soporte a Apps submission (acaciaco-site) from an
-// ordinary sales lead (`null` — the table's original and only meaning).
-const TYPE_LABEL = { soporte: 'Soporte', mejora: 'Mejora', idea: 'Idea / app nueva' }
-const TYPE_TONE = { soporte: 'bad', mejora: 'info', idea: 'ok' }
-const TYPE_FILTERS = [
-  { value: 'all', label: 'Todos' },
-  { value: 'sales', label: 'Ventas' },
-  { value: 'soporte', label: 'Soporte' },
-  { value: 'mejora', label: 'Mejora' },
-  { value: 'idea', label: 'Idea / app nueva' },
-]
 
 export function CRM() {
   const [rows, setRows] = useState(null)
