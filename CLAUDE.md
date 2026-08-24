@@ -398,6 +398,48 @@ Mientras el flag sea `true` una firma con el maestro se sigue aceptando, que es
 lo que hace irrelevante el orden de despliegue — y también lo que deja el
 agujero medio abierto. Grep del constante para ver quién sigue en legacy.
 
+### El paso 2 se intentó el 2026-08-24, salió mal, y por qué
+
+Se hizo en dos mitades. La **2a** —`appBridge.js` firma derivada y, sólo si la
+app rechaza la firma, reintenta con el maestro y **registra qué app fue**— es
+correcta y está viva. La **2b** —apagar el flag y borrar ese respaldo— se hizo
+sobre una afirmación falsa y hubo que revertirla.
+
+La afirmación era «las nueve verificaron derivada al primer intento; el respaldo
+no se disparó ni una vez». El log de la sincronización que supuestamente la
+respaldaba decía esto:
+
+```
+13:38 UTC, dpl_EbLRHFmiUGCG92exxgBEQDqL4HWR
+callBridge: app=radar  rejected the derived key and accepted the master…
+callBridge: app=rumbo  rejected the derived key and accepted the master…
+callBridge: app=puntos rejected the derived key and accepted the master…
+callBridge: app=liuma  rejected the derived key and accepted the master…
+```
+
+Cuatro de nueve. **El corte es informativo**: las cinco que verificaron derivada
+son las cinco a las que se les puso `ACACIA_APP_SLUG` ese día (cateqhub, ctrlhq,
+flowfin, kitchops, stockflow); las cuatro que fallan son las que ya lo traían de
+cuando se cableó el push de tickets. Con el respaldo borrado y desplegado a las
+13:55, esas cuatro se quedaron sin puente veinte minutos.
+
+**La condición para volver a intentarlo es una medición, no una fecha:** una
+sincronización de las nueve y, acto seguido, el log de MC de esa ventana sin
+**ni una** advertencia `rejected the derived key`. Antes hay que averiguar, app
+por app, si lo que falla es el valor de `ACACIA_APP_SLUG` (tiene que ser
+exactamente el id de la app en la bodega) o un `acaciaControl` desplegado que
+todavía no trae `_acaciaSign.ts`. MC no puede distinguirlo: no lee los secrets
+de Base44.
+
+Lo que hay que quedarse, porque la forma se repite: **un respaldo que nombra
+culpables no vale nada si nadie lee lo que nombró.** El paso 2a existe
+justamente para convertir una caída en una línea de log; saltarse la línea la
+vuelve a convertir en caída. Y ojo con el razonamiento al revés: unas horas
+antes, tres apps con la latencia del puente doblada parecían el respaldo
+disparándose y resultaron ser arranques en frío. Descartar una falsa alarma
+correctamente no es evidencia sobre una señal distinta — y aun así se usó como
+si lo fuera.
+
 **Y una consecuencia que casi se cuela:** `api/track.js` usaba
 `INGEST_HMAC_SECRET` como sal de respaldo para hashear IPs de visitantes, así
 que rotar el secreto del puente habría recontado en silencio cada visitante
