@@ -47,28 +47,29 @@ export function verify({ secret, ts, action, params, sig, maxSkewMs = 300000, no
 // it claims to be.
 const APP_KEY_PREFIX = 'acacia.app.v1.'
 
-// TRUE, and it has to stay true until four apps are fixed. Flipping it to
-// false is what finally closes the cross-attribution hole — `verifyFrom` then
-// accepts ONLY the app's derived key, so an inbound ticket signed with the bare
-// master (which every app holds) is rejected instead of being written under
-// whatever `app` its body claimed.
+// FALSE since 2026-08-24, and that flip is what closes the cross-attribution
+// hole: `verifyFrom` accepts ONLY the app's derived key, so an inbound ticket
+// signed with the bare master — which every app holds — is rejected instead of
+// being written under whatever `app` its body claimed.
 //
-// It WAS flipped to false on 2026-08-24, for about twenty minutes, on a claim
-// that every app had verified derived. That claim was false and the logs said
-// so: in the 13:38 UTC sync, radar, rumbo, puntos and liuma all rejected the
-// derived key and were carried by appBridge's fallback. With the flag off and
-// the fallback gone, those four went dark. Reverted.
+// It took two attempts, and the difference is worth keeping. The first flip,
+// earlier the same day, was made on a claim that every app had verified
+// derived. The claim was false and the log of that very sync said so: radar,
+// rumbo, puntos and liuma had all rejected the derived key and been carried by
+// appBridge's fallback. With the flag off and the fallback deleted, those four
+// went dark for two hours until it was reverted.
 //
-// THE GATE FOR FLIPPING IT AGAIN, and it is a measurement, not a wait: run a
-// full nine-app sync and read Mission Control's runtime log for the window. If
-// it contains ZERO "rejected the derived key" warnings, every app is deriving
-// the same key MC is, and the flag can go false in the same pass that deletes
-// appBridge's fallback. If it contains any, that app's ACACIA_APP_SLUG or its
-// deployed acaciaControl is the thing to fix first.
+// The second flip is on a measurement: after correcting ACACIA_APP_SLUG in
+// those four and redeploying them, the 16:29 UTC sync of all nine produced nine
+// audit rows and ZERO "rejected the derived key" warnings in this project's
+// runtime log for that window. That is the gate — a log that was read, not a
+// date that passed.
 //
-// Keep this in sync with every app's `_acaciaSign.ts` (canonical:
-// acacia-app-standard → shared/bridge/).
-export const ACCEPT_LEGACY_MASTER = true
+// If it ever has to go back to true, that is a fleet-wide rollback and the
+// fallback in appBridge.js comes back with it, in the same commit. Keep this in
+// sync with every app's `_acaciaSign.ts` (canonical: acacia-app-standard →
+// shared/bridge/).
+export const ACCEPT_LEGACY_MASTER = false
 
 /** This app's bridge key. `slug` is `apps.id` in the bodega. */
 export function deriveAppKey(master, slug) {

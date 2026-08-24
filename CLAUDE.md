@@ -387,23 +387,26 @@ respondería `bad signature` — licencias, tickets, uso y salud de todo el
 portafolio caídos hasta el último deploy. Por eso verifica derivada ya y firma
 derivada después.
 
-**El paso 2 es el que cierra el agujero, y falta:**
+**El paso 2 es el que cierra el agujero, y está hecho** (2026-08-24):
 
-1. poner `ACACIA_APP_SLUG` en flowfin, stockflow, cateqhub, ctrlhq y kitchops
-   (las otras cuatro ya lo tenían por el push de tickets);
-2. cambiar `appBridge.js` a `signFor({ master: secret, slug: app.id, … })`;
-3. poner `ACCEPT_LEGACY_MASTER = false` en los 11 sitios y redesplegar.
+1. `ACACIA_APP_SLUG` puesto en flowfin, stockflow, cateqhub, ctrlhq y kitchops —
+   y **corregido** en radar, rumbo, puntos y liuma, que lo traían de antes con
+   un valor que no era el id de la app;
+2. `appBridge.js` firma con `signFor({ master: secret, slug: app.id, … })`;
+3. `ACCEPT_LEGACY_MASTER = false` en los 11 sitios, y el respaldo de
+   `appBridge.js` borrado en el mismo commit.
 
-Mientras el flag sea `true` una firma con el maestro se sigue aceptando, que es
-lo que hace irrelevante el orden de despliegue — y también lo que deja el
-agujero medio abierto. Grep del constante para ver quién sigue en legacy.
+El paso 3 se hizo dos veces: la primera sin leer el log, y costó dos horas de
+puente caído en cuatro apps. La segunda contra una sincronización de las nueve
+con cero advertencias. El detalle está abajo, porque la forma se repite.
 
-### El paso 2 se intentó el 2026-08-24, salió mal, y por qué
+### El paso 2, el 2026-08-24: salió mal, se revirtió, y se rehízo midiendo
 
 Se hizo en dos mitades. La **2a** —`appBridge.js` firma derivada y, sólo si la
 app rechaza la firma, reintenta con el maestro y **registra qué app fue**— es
-correcta y está viva. La **2b** —apagar el flag y borrar ese respaldo— se hizo
-sobre una afirmación falsa y hubo que revertirla.
+correcta y fue la que salvó el día. La **2b** —apagar el flag y borrar ese
+respaldo— se hizo primero sobre una afirmación falsa, hubo que revertirla, y se
+rehízo unas horas después con la medición delante.
 
 La afirmación era «las nueve verificaron derivada al primer intento; el respaldo
 no se disparó ni una vez». El log de la sincronización que supuestamente la
@@ -423,13 +426,19 @@ flowfin, kitchops, stockflow); las cuatro que fallan son las que ya lo traían d
 cuando se cableó el push de tickets. Con el respaldo borrado y desplegado a las
 13:55, esas cuatro se quedaron sin puente veinte minutos.
 
-**La condición para volver a intentarlo es una medición, no una fecha:** una
-sincronización de las nueve y, acto seguido, el log de MC de esa ventana sin
-**ni una** advertencia `rejected the derived key`. Antes hay que averiguar, app
-por app, si lo que falla es el valor de `ACACIA_APP_SLUG` (tiene que ser
-exactamente el id de la app en la bodega) o un `acaciaControl` desplegado que
-todavía no trae `_acaciaSign.ts`. MC no puede distinguirlo: no lee los secrets
-de Base44.
+**La condición para volver a intentarlo era una medición, no una fecha, y se
+cumplió el mismo día.** A las 16:29 UTC, con `ACACIA_APP_SLUG` corregido en las
+cuatro y las nueve apps redesplegadas, una sincronización completa dejó nueve
+filas en `audit_actions` y **cero** advertencias `rejected the derived key` en
+el log de esa ventana. Con eso el 2b se rehizo: `ACCEPT_LEGACY_MASTER = false`
+y el respaldo de `appBridge.js` borrado, en el mismo commit.
+
+**De las dos causas posibles, era el secreto.** La CLI reportó `acaciaControl
+unchanged` en las cuatro, o sea que el código desplegado ya traía
+`_acaciaSign.ts` desde el deploy de la mañana — antes de la sincronización que
+falló. No era un `acaciaControl` viejo: era el valor, que cuatro `CLAUDE.md`
+afirmaban correcto y nadie había abierto el panel a leer. De ahí el módulo 16
+del estándar.
 
 Lo que hay que quedarse, porque la forma se repite: **un respaldo que nombra
 culpables no vale nada si nadie lee lo que nombró.** El paso 2a existe
