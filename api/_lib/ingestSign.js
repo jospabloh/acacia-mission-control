@@ -47,17 +47,28 @@ export function verify({ secret, ts, action, params, sig, maxSkewMs = 300000, no
 // it claims to be.
 const APP_KEY_PREFIX = 'acacia.app.v1.'
 
-// FALSE since 2026-08-24, and that flip is what closed the cross-attribution
-// hole. `verifyFrom` now accepts ONLY the app's derived key, so an inbound
-// ticket signed with the bare master — which every app holds — is rejected
-// instead of being written under whatever `app` its body claimed.
+// TRUE, and it has to stay true until four apps are fixed. Flipping it to
+// false is what finally closes the cross-attribution hole — `verifyFrom` then
+// accepts ONLY the app's derived key, so an inbound ticket signed with the bare
+// master (which every app holds) is rejected instead of being written under
+// whatever `app` its body claimed.
 //
-// While it was true, MC and the nine apps could deploy in any order without
-// the bridge going dark. It was flipped once that was no longer needed: all
-// nine were synced one by one on 2026-08-24 and every call verified derived on
-// the first attempt, with no fallback. Keep this in sync with every app's
-// `_acaciaSign.ts` (canonical: acacia-app-standard → shared/bridge/).
-export const ACCEPT_LEGACY_MASTER = false
+// It WAS flipped to false on 2026-08-24, for about twenty minutes, on a claim
+// that every app had verified derived. That claim was false and the logs said
+// so: in the 13:38 UTC sync, radar, rumbo, puntos and liuma all rejected the
+// derived key and were carried by appBridge's fallback. With the flag off and
+// the fallback gone, those four went dark. Reverted.
+//
+// THE GATE FOR FLIPPING IT AGAIN, and it is a measurement, not a wait: run a
+// full nine-app sync and read Mission Control's runtime log for the window. If
+// it contains ZERO "rejected the derived key" warnings, every app is deriving
+// the same key MC is, and the flag can go false in the same pass that deletes
+// appBridge's fallback. If it contains any, that app's ACACIA_APP_SLUG or its
+// deployed acaciaControl is the thing to fix first.
+//
+// Keep this in sync with every app's `_acaciaSign.ts` (canonical:
+// acacia-app-standard → shared/bridge/).
+export const ACCEPT_LEGACY_MASTER = true
 
 /** This app's bridge key. `slug` is `apps.id` in the bodega. */
 export function deriveAppKey(master, slug) {
