@@ -9,7 +9,7 @@
 //   · los verbos no cambian de nombre entre el botón y el aviso de resultado
 //     ("Dar de baja" → "Licencia dada de baja");
 //   · nada destructivo se dispara sin decir antes qué va a pasar exactamente.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Icon } from './icons.jsx'
 
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1 focus-visible:ring-offset-paper-card'
@@ -157,7 +157,22 @@ export function Toggle({ checked, onChange, label, title, disabled }) {
 // hint, disabled, title, separator }.
 export function ActionMenu({ items, label = 'Acciones', align = 'right' }) {
   const box = useRef(null)
+  const pop = useRef(null)
   const [open, setOpen] = useState(false)
+  // Hacia arriba cuando abajo no cabe: el menú del último renglón de una tabla
+  // larga queda contra el borde de la ventana y se lee cortado.
+  const [up, setUp] = useState(false)
+
+  useLayoutEffect(() => {
+    if (!open) { setUp(false); return }
+    // `offsetHeight`, no `getBoundingClientRect`: el menú entra con la
+    // animación `pop`, que arranca en scale(0.985), y un rect medido a mitad de
+    // ella miente sobre el alto real. El 4 es el `mt-1`/`mb-1` del hueco.
+    const h = pop.current?.offsetHeight
+    const btn = box.current?.getBoundingClientRect()
+    if (!h || !btn) return
+    setUp(btn.bottom + 4 + h > window.innerHeight - 8 && btn.top > h + 8)
+  }, [open])
 
   useEffect(() => {
     if (!open) return undefined
@@ -181,7 +196,7 @@ export function ActionMenu({ items, label = 'Acciones', align = 'right' }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>
       </button>
       {open && (
-        <div role="menu" className={`pop absolute z-40 mt-1 w-60 overflow-hidden rounded-xl border border-hair bg-paper-card py-1 shadow-card ${align === 'right' ? 'right-0' : 'left-0'}`}>
+        <div ref={pop} role="menu" className={`pop absolute z-40 w-60 overflow-hidden rounded-xl border border-hair bg-paper-card py-1 shadow-card ${align === 'right' ? 'right-0' : 'left-0'} ${up ? 'bottom-full mb-1' : 'mt-1'}`}>
           {usable.map((it, i) => it.separator ? (
             <div key={`sep-${i}`} className="my-1 border-t border-hair" />
           ) : (

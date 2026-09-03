@@ -536,7 +536,11 @@ export function Licenses() {
               {filtersOn && <Button className="mt-4" onClick={clearFilters}>Ver todas</Button>}
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-hair bg-paper-card">
+            // Sin `overflow-hidden`: recortaba el menú de acciones del renglón
+            // (un desplegable absoluto) contra el borde de la tarjeta, y de las
+            // ocho acciones de una licencia sólo se veía la primera a medias.
+            // Las esquinas las redondea cada renglón por su cuenta.
+            <div className="rounded-xl border border-hair bg-paper-card">
               {/* Encabezado de tabla solo en pantallas anchas; abajo cada
                   licencia es una tarjeta, que en el celular se lee mucho mejor
                   que una tabla con scroll horizontal. */}
@@ -549,7 +553,7 @@ export function Licenses() {
                   const caps = capsOf(r)
                   const open = expanded === r.id
                   return (
-                    <li key={r.id} className={`border-b border-hair last:border-0 ${r.archived_at ? 'bg-paper-subtle/40' : ''}`}>
+                    <li key={r.id} className={`border-b border-hair first:rounded-t-xl last:rounded-b-xl last:border-0 ${r.archived_at ? 'bg-paper-subtle/40' : ''}`}>
                       <div className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,2fr)_7rem_9rem_minmax(0,1.5fr)_11rem] lg:items-start lg:gap-4">
                         {/* Tenant + app */}
                         <div className="min-w-0">
