@@ -77,3 +77,67 @@ test('isMappable rejects records without an id', () => {
   assert.equal(isMappable({}, PUNTOS), false)
   assert.equal(isMappable({ id: '' }, PUNTOS), false)
 })
+
+// ── config.field_defaults (migration 0043) ────────────────────────────────
+//
+// The case these cover, verbatim from production: cateqhub's only parish was
+// created 2026-07-22, before `plan`/`license_status`/`premium_period_end_at`
+// existed on the Parish schema. A `.jsonc` default applies at creation, not
+// retroactively, so the bridge ships a record with those keys ABSENT. The app
+// resolves that to its permanent free tier; the bodega used to store null and
+// the panel painted "—", which reads as a broken sync rather than "Gratis".
+const CATEQHUB = { id: 'cateqhub', config: {
+  license_entity: 'Parish',
+  field_map: { tenant_external_id: 'id', name: 'name', plan: 'plan', status: 'license_status', current_period_end: 'premium_period_end_at' },
+  field_defaults: { plan: 'free', status: 'active' },
+} }
+
+// The exact record shape observed in licenses.raw for that parish.
+const PRE_SCHEMA_PARISH = {
+  id: '6a602ae41f0618892e38611b', name: 'Parroquia San Testing', active: true,
+  is_sample: false, created_date: '2026-07-22T02:28:52.171000',
+  admin_contact: 'Jose Pablo Herrera', created_by_id: '6a5e79098ec761efd47be801',
+}
+
+test('field_defaults fill a licence field the record does not carry at all', () => {
+  const { tenant, license } = mapLicenseRecord(PRE_SCHEMA_PARISH, CATEQHUB)
+  assert.equal(tenant.name, 'Parroquia San Testing')
+  assert.equal(license.plan, 'free')
+  assert.equal(license.status, 'active')
+  // No default declared for the period end, so it stays null — which is what
+  // keeps renewal-reminders.js from selecting this row.
+  assert.equal(license.current_period_end, null)
+})
+
+test('a real value always beats the default', () => {
+  const { license } = mapLicenseRecord(
+    { ...PRE_SCHEMA_PARISH, plan: 'premium', license_status: 'read_only' },
+    CATEQHUB,
+  )
+  assert.equal(license.plan, 'premium')
+  assert.equal(license.status, 'read_only')
+})
+
+// Base44 returns a cleared field as '', not as a missing key. Both must reach
+// the default, or a parish that was explicitly emptied would still show "—".
+test('an empty string counts as absent and takes the default', () => {
+  const { license } = mapLicenseRecord({ ...PRE_SCHEMA_PARISH, plan: '', license_status: '' }, CATEQHUB)
+  assert.equal(license.plan, 'free')
+  assert.equal(license.status, 'active')
+})
+
+// The load-bearing half: portfolioLifecycle.js selects rows whose plan is in
+// cfg.lifecycle.paidPlanValues, and those rows get status transitions and
+// customer-facing renewal email. cateqhub's paid list is ['premium'], so the
+// defaulted plan must stay OUT of it. If someone ever changes the default to a
+// paid plan, this fails instead of quietly mailing a demo tenant.
+test('the defaulted plan is not a paid plan, so the lifecycle cron skips it', () => {
+  const { license } = mapLicenseRecord(PRE_SCHEMA_PARISH, CATEQHUB)
+  assert.equal(['premium'].includes(license.plan), false)
+})
+
+test('an app with no field_defaults is unchanged', () => {
+  const { license } = mapLicenseRecord({ id: 'b1', name: 'Cafe Luna' }, PUNTOS)
+  assert.equal(license.plan, null)
+  assert.equal(license.status, null)
+})
