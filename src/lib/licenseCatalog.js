@@ -62,7 +62,7 @@ export const LICENSE_CATALOG = {
     dateFormat: 'datetime', dayConvention: 'preserve_day', addons: [],
   },
   cateqhub: {
-    plans: ['free', 'premium'],
+    plans: ['premium'],
     statuses: { active: 'active', suspend: 'access_denied', view_only: 'read_only', cancel: 'access_denied' },
     // Premium se cobra a mano (sin Mercado Pago), así que no hay "Confirmar
     // pago"; el vencimiento (premium_period_end_at) sí se edita a mano.

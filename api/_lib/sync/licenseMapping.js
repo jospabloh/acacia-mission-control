@@ -19,8 +19,14 @@
 // A default must mirror what the app actually does with the absent field, and
 // it is load-bearing beyond display: `portfolioLifecycle.js` selects rows whose
 // plan is in `cfg.lifecycle.paidPlanValues`. Defaulting a plan INTO that list
-// would sweep tenants into the licence cron and its customer emails. cateqhub's
-// paid list is ['premium'] and its default is 'free', deliberately outside it.
+// would sweep tenants into the licence cron and its customer emails, so a
+// default MUST stay outside it. cateqhub's paid list is ['premium'] and its
+// default is 'sin_licencia' — deliberately outside `plans` too, so no operator
+// can pick it from the set_plan dropdown: it is how the panel RENDERS a tenant
+// row that predates the licence fields, never a plan anyone is on. Until
+// 2026-09-09 that default was 'free', which was a real plan; cateqhub removed
+// it, and a default naming a plan that no longer exists would be worse than
+// the null it replaced.
 
 const CANDIDATES = {
   name:               ['name', 'tenant_name', 'business_name', 'school_name', 'family_name'],

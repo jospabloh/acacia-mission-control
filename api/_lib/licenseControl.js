@@ -142,7 +142,7 @@ const APPS = {
   cateqhub: {
     entity: 'Parish', statusField: 'license_status', planField: 'plan',
     statuses: { active: 'active', suspended: 'access_denied', view_only: 'read_only' },
-    plans: ['free', 'premium'],
+    plans: ['premium'],
     // Premium se activa/factura manualmente hoy (ver Premium.jsx del app) — sin
     // Mercado Pago todavía, así que no hay confirm_payment para este app.
     // Precio de referencia (informativo, no aplicado por este archivo) — plan
@@ -192,27 +192,24 @@ const APPS = {
         field: 'support_priority_addon', values: [true, false],
       },
     },
-    // plan="free" es un plan permanente y normal en CateqHub (núcleo completo
-    // hasta freeDowngrade.childCap niños activos, sin Tutores/mensajería/
-    // tareas/pulseras) — no una penalización. Toda parroquia nueva arranca en
-    // plan=premium con 30 días de prueba (premium_period_end_at). Si ese
-    // período vence sin renovarse:
-    //   - freeDowngrade.childCap niños activos o menos → api/cron/
-    //     license-lifecycle.js baja la parroquia directo a plan="free" antes
-    //     de aplicar la transición a read_only (hook genérico, gateado en
-    //     cfg.freeDowngrade — no hardcodeado a cateqhub).
-    //   - más de freeDowngrade.childCap → sigue el ciclo de abajo
-    //     (lifecycle), que restringe TODA la app (no solo Tutores) hasta
-    //     pagar el nivel Premium que corresponda.
-    // El borrado automático (ver license-delete-premium-data) sigue limitado
-    // a Guardian/ChildGuardian (Tutores) — nunca a niños/grupos/asistencia —
-    // y resetea la parroquia a plan="free" (el mismo plan permanente de
-    // arriba, no un estado especial).
-    freeDowngrade: {
-      childCap: 50,
-      freePlanValue: 'free',
-      usage: { entity: 'Child', tenantField: 'parish_id', filterField: 'active', filterValue: true },
-    },
+    // CateqHub dejó de tener plan gratuito el 2026-09-09 (app 1.10.0): es UN
+    // producto con precio por volumen desde el primer niño. El plan Gratis
+    // (núcleo completo hasta 50 niños activos, sin Tutores/mensajería/tareas/
+    // pulseras) no era algo que ACACIA vendiera —la tabla de precios pública
+    // empezaba en 51 niños, así que una parroquia de 50 o menos no tenía forma
+    // de pagar— y era además la desviación que impedía cumplir el módulo 1 del
+    // estándar, que define cuatro estados y ninguno gratuito.
+    //
+    // Por eso ya NO hay bloque `freeDowngrade` aquí: toda parroquia cuya
+    // prueba o pago vence sin renovarse sigue el mismo ciclo de abajo, sin
+    // importar su tamaño. El hook `shouldDowngradeToFree` de
+    // portfolioLifecycle.js se queda —es genérico y está gateado en
+    // cfg.freeDowngrade— por si otro app del portafolio lo necesita; hoy
+    // ningún app lo declara.
+    //
+    // El borrado automático (ver license-delete-premium-data) sigue limitado a
+    // Guardian/ChildGuardian (Tutores) — nunca a niños/grupos/asistencia — y
+    // ya no resetea el plan, porque no hay a qué resetearlo.
     // Ciclo unificado (portafolio) — ver docs/superpowers/specs/2026-08-03-
     // portfolio-license-lifecycle-design.md. Hasta 2026-08-03, CateqHub tenía
     // su PROPIO ciclo por-etapa (15 días activo→read_only, 15 más
