@@ -124,11 +124,15 @@ test('cateqhub set_plan a premium estampa premium_period_end_at a +30 días', ()
   assert.equal(change.patch.premium_period_end_at, '2026-08-22T00:00:00.000Z')
 })
 
-test('cateqhub set_plan a free NO estampa premium_period_end_at', () => {
+// CateqHub eliminó su plan gratuito el 2026-09-09 (app 1.10.0). Hasta esa
+// fecha esta prueba fijaba lo contrario —que set_plan a 'free' funcionaba y no
+// estampaba premium_period_end_at—; ahora fija que ese plan ya no se puede
+// poner desde el panel, que es la mitad que evita revivirlo por accidente.
+test('cateqhub ya no acepta set_plan a free', () => {
   const change = buildLicenseChange('cateqhub', 'set_plan', { plan: 'free' })
-  assert.equal(change.error, undefined)
-  assert.equal(change.patch.plan, 'free')
-  assert.equal(change.patch.premium_period_end_at, undefined)
+  assert.match(change.error, /plan inválido para cateqhub: free/,
+    'El plan gratuito de CateqHub se eliminó: el panel no debe poder volver a ponerlo. ' +
+    'Si esta prueba falla, alguien lo reintrodujo en licenseControl.js.')
 })
 
 test('cateqhub statuses mapean read_only/access_denied a las llaves genéricas view_only/suspended', () => {

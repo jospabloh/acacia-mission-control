@@ -113,20 +113,24 @@ export default async function handler(req, res) {
     // El plan "gratis" se deriva de cfg (cualquier plan de cfg.plans que NO esté
     // en lifecycle.paidPlanValues) en vez de escribir 'free' fijo — para que
     // esto siga siendo correcto si algún día otra app se suma a `lifecycle` con
-    // un nombre de plan gratuito distinto. Si cfg no define ninguno, fallar
-    // fuerte: los datos de menores YA se borraron, así que reiniciar la
-    // licencia a un plan de pago por defecto silencioso sería peor que dejarla
-    // varada en deletion_eligible para que un humano revise cfg.
+    // un nombre de plan gratuito distinto.
+    //
+    // Que cfg NO defina ninguno es una configuración LEGÍTIMA desde el
+    // 2026-09-09, no un error: cateqhub dejó de tener plan gratuito, así que no
+    // hay a qué reiniciar la licencia. En ese caso el paso se salta y el tenant
+    // se queda donde estaba (deletion_eligible), que es lo correcto — sus datos
+    // Premium se borraron y sigue sin pagar, así que devolverle acceso sería
+    // regalarle justo el plan que se eliminó. Hasta esa fecha esto era un 500
+    // con los datos ya borrados; ahora sólo lo es si cfg está mal de otra forma.
     const freePlan = cfg.plans.find((p) => !cfg.lifecycle.paidPlanValues.includes(p))
     if (!freePlan) {
-      await audit('control:license-delete-premium-data-reset-failed', {
+      await audit('control:license-delete-premium-data-no-reset', {
         actor: member.user_id, actor_email: member.email, target_app: appId, target_id: licenseExternalId,
-        payload: { deletedCounts, error: `config de ${appId} no define un plan gratuito en cfg.plans` },
+        payload: { deletedCounts, reason: `${appId} no tiene plan gratuito: la licencia se deja como está` },
       })
-      return res.status(500).json({
-        error: `datos borrados, pero config de ${appId} no define un plan gratuito; la licencia NO se reinició. Revisa licenseControl.js.`,
-        deletedCounts,
-      })
+      let resyncNoReset = null
+      try { resyncNoReset = await syncLicensesForApp(app) } catch (e) { resyncNoReset = { error: e.message } }
+      return res.status(200).json({ ok: true, deletedCounts, licenseReset: false, resync: resyncNoReset })
     }
     const activeStatus = cfg.statuses.active
     // Desde el ciclo unificado (2026-08-03), Mission Control ya no rastrea
