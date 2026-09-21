@@ -57,6 +57,7 @@ function AppCard({ app, stat, sess }) {
 function CatalogTable({ items, byApp }) {
   return (
     <div className="overflow-hidden rounded-xl border border-hair bg-paper-card">
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wide text-ink-mute border-b border-hair">
           <tr>
@@ -87,6 +88,7 @@ function CatalogTable({ items, byApp }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
