@@ -250,21 +250,29 @@ const APPS = {
   },
   // ArtisKids (jospabloh/artiskids) — registered 2026-09-22. Family art-capsule
   // app: tenant = Family, billing_status/license_plan on that same entity,
-  // same shape as stockflow/puntos/ctrlhq. No paid tiers named yet (frozen
-  // decision in artiskids' own CLAUDE.md: 30-day trial, then "a paid plan via
-  // Mercado Pago" with no tier structure decided) — `plans: []` is the honest
-  // reflection of that, not a guess at names nobody has picked. `payment:
-  // 'ref'` because artiskids has no last_payment_confirmed_at/by/period
-  // fields (unlike flowfin/liuma's 'full' shape) — just payment_reference,
-  // same as stockflow/puntos/ctrlhq/kitchops. No `canceled` state in
-  // Family.jsonc's enum (["trial","active","view_only","suspended"]), so
-  // `cancel` falls through to `suspended`, same as most of the portfolio.
+  // same shape as stockflow/puntos/ctrlhq. `payment: 'ref'` because artiskids
+  // has no last_payment_confirmed_at/by/period fields (unlike flowfin/liuma's
+  // 'full' shape) — just payment_reference, same as stockflow/puntos/ctrlhq/
+  // kitchops. No `canceled` state in Family.jsonc's enum
+  // (["trial","active","view_only","suspended"]), so `cancel` falls through
+  // to `suspended`, same as most of the portfolio.
+  //
+  // `plans: ['recuerdos']` — single paid tier, added 2026-09-22 alongside the
+  // storage-quota feature in artiskids itself (500MB trial / 5GB paid,
+  // enforced server-side in content/entry.ts, NOT here — Mission Control only
+  // needs the plan's name to exist so Licencias can set it). Deliberately one
+  // tier, not flowfin's three: unlike a budgeting tool, there's no axis of
+  // growing complexity here to price against, just storage, and a ladder of
+  // tiers over one variable would be complexity with no purpose (YAGNI).
+  // Priced below flowfin's $299 entry (a utility tool) since a kids'-drawings
+  // scrapbook is a lighter, more casual product — closer to Tinybeans'
+  // ~$85-100 MXN/mes equivalent than to flowfin's positioning.
   artiskids: {
     entity: 'Family', statusField: 'billing_status', planField: 'license_plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: [],
+    plans: ['recuerdos'],
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
-    lifecycle: { paidPlanValues: [], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+    lifecycle: { paidPlanValues: ['recuerdos'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
 }
 

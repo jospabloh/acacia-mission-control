@@ -70,7 +70,7 @@ export const LICENSE_CATALOG = {
     dateFormat: 'datetime', dayConvention: null, addons: ['implementation', 'support_priority'],
   },
   artiskids: {
-    plans: [],
+    plans: ['recuerdos'],
     statuses: { active: 'active', suspend: 'suspended', view_only: 'view_only', cancel: 'suspended' },
     hasBilling: true, hasViewOnly: true, hasExpiry: true, hasTrial: true,
     dateFormat: 'datetime', dayConvention: 'preserve_day', addons: [],
