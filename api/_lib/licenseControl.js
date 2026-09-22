@@ -248,6 +248,24 @@ const APPS = {
       emailKinds: { read_only: 'premium_read_only_reminder', blocked: 'premium_access_denied_reminder' },
     },
   },
+  // ArtisKids (jospabloh/artiskids) — registered 2026-09-22. Family art-capsule
+  // app: tenant = Family, billing_status/license_plan on that same entity,
+  // same shape as stockflow/puntos/ctrlhq. No paid tiers named yet (frozen
+  // decision in artiskids' own CLAUDE.md: 30-day trial, then "a paid plan via
+  // Mercado Pago" with no tier structure decided) — `plans: []` is the honest
+  // reflection of that, not a guess at names nobody has picked. `payment:
+  // 'ref'` because artiskids has no last_payment_confirmed_at/by/period
+  // fields (unlike flowfin/liuma's 'full' shape) — just payment_reference,
+  // same as stockflow/puntos/ctrlhq/kitchops. No `canceled` state in
+  // Family.jsonc's enum (["trial","active","view_only","suspended"]), so
+  // `cancel` falls through to `suspended`, same as most of the portfolio.
+  artiskids: {
+    entity: 'Family', statusField: 'billing_status', planField: 'license_plan',
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
+    plans: [],
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
+    lifecycle: { paidPlanValues: [], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
+  },
 }
 
 export function licenseControlFor(appId) {

@@ -133,6 +133,24 @@ const APPS = {
       nameField: 'author_name', tsField: 'created_date', rich: false,
     },
   },
+  // ArtisKids: registered 2026-09-22. SupportTicket carries a single
+  // `message` field, no separate SupportTicketMessage entity and no inline
+  // responses[] array — its CLAUDE.md is explicit that a two-way reply
+  // thread isn't built yet ("Mission Control's own panel is where a human
+  // replies" means by email, not by writing back into this entity). Module
+  // 8's letter only requires the entry point + real-time sync, which this
+  // satisfies. `thread: null` and buildTicketReply below guards on it and
+  // errors instead of assuming a thread shape that doesn't exist here.
+  artiskids: {
+    entity: 'SupportTicket', tenantField: 'family_id',
+    subjectField: 'subject', statusField: 'status', priorityField: null,
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['open', 'resolved', 'closed'],
+    openStatus: 'open', inProgressStatus: 'open', // no in_progress in its enum; unused, see buildTicketReply's guard
+    resolvedField: null, closedField: null,
+    activityField: 'last_activity_at',
+    thread: null,
+  },
   rumbo: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
     subjectField: 'subject', statusField: 'status', priorityField: 'priority',
@@ -170,6 +188,7 @@ export function buildTicketReply(appId, { ticketRaw, body, actorEmail, actorName
   if (!cfg) return { error: `app ${appId} no soporta tickets` }
   const text = String(body ?? '').trim()
   if (!text) return { error: 'el mensaje no puede estar vacío' }
+  if (!cfg.thread) return { error: `${appId} no soporta respuestas desde el panel todavía` }
   const raw = ticketRaw ?? {}
   const id = raw.id
   if (!id) return { error: 'ticket sin id' }

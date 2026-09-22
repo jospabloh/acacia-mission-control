@@ -69,6 +69,12 @@ export const LICENSE_CATALOG = {
     hasBilling: false, hasViewOnly: true, hasExpiry: true, hasTrial: false,
     dateFormat: 'datetime', dayConvention: null, addons: ['implementation', 'support_priority'],
   },
+  artiskids: {
+    plans: [],
+    statuses: { active: 'active', suspend: 'suspended', view_only: 'view_only', cancel: 'suspended' },
+    hasBilling: true, hasViewOnly: true, hasExpiry: true, hasTrial: true,
+    dateFormat: 'datetime', dayConvention: 'preserve_day', addons: [],
+  },
 }
 
 // `null` para una app sin control de licencia (freeware, sitios, apps sin

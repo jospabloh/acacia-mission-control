@@ -46,6 +46,17 @@ export const APP_MSG = {
     name: 'CateqHub', entity: 'Parish', value: 'la asistencia y el catecismo de tu parroquia al día',
     recipient: { related: { entity: 'User', keyField: 'parish_id', keyFromRecord: 'id', emailField: 'email', roleField: 'parish_role', roles: ['admin'] }, nameField: 'name' },
   },
+  // ArtisKids: registered 2026-09-22. Family entity, family_admin recipients
+  // via User.family_id/family_role — same resolution shape as stockflow/
+  // ctrlhq/kitchops/cateqhub. No `nameField`: artiskids' User has no custom
+  // `name` field (unlike those apps, unverified whether they actually do
+  // either) and Base44's built-in `full_name` wasn't confirmed populated for
+  // real accounts in this session — omitting it is the honest choice; the
+  // template already falls back to a generic "Hola," when unset.
+  artiskids: {
+    name: 'ArtisKids', entity: 'Family', value: 'los dibujos de sus hijos guardados para siempre',
+    recipient: { related: { entity: 'User', keyField: 'family_id', keyFromRecord: 'id', emailField: 'email', roleField: 'family_role', roles: ['family_admin'] } },
+  },
 }
 
 export function messagingFor(appId) { return APP_MSG[appId] ?? null }
