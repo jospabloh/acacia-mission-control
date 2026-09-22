@@ -7,7 +7,19 @@ const NOW_ISO = NOW.toISOString()
 
 // ── every app that persists tickets ──────────────────────────────────────────
 test('all portfolio apps have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['cateqhub', 'ctrlhq', 'flowfin', 'kitchops', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+  assert.deepEqual(ticketApps().sort(), ['artiskids', 'cateqhub', 'ctrlhq', 'flowfin', 'kitchops', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+})
+
+// ── artiskids: status changes work, replies don't (no thread entity yet) ────
+test('artiskids resolver estampa status pero no resolved_at (no tiene ese campo)', () => {
+  const out = buildTicketStatus('artiskids', { ticketRaw: { id: 'ak1' }, status: 'resolved', now: NOW })
+  assert.equal(out.patch.status, 'resolved')
+  assert.equal(out.patch.resolved_at, undefined)
+})
+
+test('artiskids reply se rechaza: no tiene thread', () => {
+  const out = buildTicketReply('artiskids', { ticketRaw: { id: 'ak1', family_id: 'fam1', status: 'open' }, body: 'hola', actorEmail: 'op@acacia.mx', now: NOW })
+  assert.match(out.error, /no soporta respuestas/)
 })
 
 // ── kitchops: four states with a real resolved_at, unlike ctrlhq's two ───────

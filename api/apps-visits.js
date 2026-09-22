@@ -22,7 +22,7 @@ import { supabaseAdmin, requireSupabase } from './_lib/supabaseAdmin.js'
 const APP_SLUGS = [
   'stockflow', 'flowfin', 'cateqhub',
   'liuma', 'puntos-plus', 'rumbo', 'radar',
-  'ctrlhq', 'kitchops',
+  'ctrlhq', 'kitchops', 'artiskids',
 ]
 
 export default async function handler(req, res) {
