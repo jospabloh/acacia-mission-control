@@ -1,7 +1,7 @@
 // New-tenant notice for the platform owner (STANDARD Module 1: "the platform
 // owner has to find out the same way a new support ticket does"). Two callers,
 // one code path, so both behave identically:
-//   - api/ingest/tenant-pull.js — real-time ping from the app right after signup;
+//   - api/_lib/ingest/tenant-pull.js — real-time ping from the app right after signup;
 //   - syncLicensesForApp — the daily sync, as the net for any app without the ping.
 // Idempotent: one `alerts` row per (app, tenant) is the record that the owner
 // was told, so a ping followed by the sync never emails twice.

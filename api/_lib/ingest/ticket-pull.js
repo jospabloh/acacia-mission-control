@@ -8,10 +8,10 @@
 // Trust model: the body carries no ticket data we trust — only {app, ticketId}.
 // MC fetches the real record from the app itself, so a forged body can't inject a
 // fake ticket; an unknown id just no-ops. CORS-open because it's a browser target.
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { callBridge, bridgeConfigured } from '../_lib/appBridge.js'
-import { ticketControlFor } from '../_lib/ticketControl.js'
-import { processIncomingTicket } from '../_lib/ingestTicket.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { ticketControlFor } from '../ticketControl.js'
+import { processIncomingTicket } from '../ingestTicket.js'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')

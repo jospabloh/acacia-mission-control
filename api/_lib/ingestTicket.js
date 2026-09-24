@@ -1,8 +1,8 @@
 // Shared core for real-time ticket ingest, used by BOTH ingest paths:
-//   - api/ingest/ticket.js      — push: the app POSTs the signed record. Four
+//   - api/_lib/ingest/ticket.js      — push: the app POSTs the signed record. Four
 //     apps host a signer: puntos, liuma and radar in a notifyTicketCreated
 //     function, rumbo inline in submitTicket (which creates the ticket anyway).
-//   - api/ingest/ticket-pull.js — pull: the app's frontend just pings MC with a
+//   - api/_lib/ingest/ticket-pull.js — pull: the app's frontend just pings MC with a
 //     ticket id and MC reads the authoritative record via the acaciaControl
 //     bridge. Five apps: cateqhub, flowfin, stockflow, ctrlhq and kitchops.
 //     flowfin and stockflow sit at Base44's function cap and could not host a

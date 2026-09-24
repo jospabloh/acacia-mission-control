@@ -7,11 +7,11 @@
 // The shared upsert + SLA + notification logic lives in _lib/ingestTicket.js so
 // the pull variant (ticket-pull.js, for apps that can't host a function) gives
 // the identical treatment. Here we just verify the signature and resolve the app.
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { verifyFrom } from '../_lib/ingestSign.js'
-import { isTicketMappable } from '../_lib/sync/ticketMapping.js'
-import { ticketControlFor } from '../_lib/ticketControl.js'
-import { processIncomingTicket } from '../_lib/ingestTicket.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { verifyFrom } from '../ingestSign.js'
+import { isTicketMappable } from '../sync/ticketMapping.js'
+import { ticketControlFor } from '../ticketControl.js'
+import { processIncomingTicket } from '../ingestTicket.js'
 
 const ACTION = 'ticket.ingest'
 

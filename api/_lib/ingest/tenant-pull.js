@@ -5,9 +5,9 @@
 // only for a tenant that really exists in the app and is new to the bodega —
 // so a forged ping can't invent a customer, and a repeat ping is a no-op.
 // CORS-open because the app's browser calls it right after signup.
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { bridgeConfigured } from '../_lib/appBridge.js'
-import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { bridgeConfigured } from '../appBridge.js'
+import { syncLicensesForApp } from '../sync/syncLicenses.js'
 
 const ID_RE = /^[A-Za-z0-9_-]{6,64}$/
 

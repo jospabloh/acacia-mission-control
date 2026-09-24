@@ -1,5 +1,5 @@
 // Renders the internal "nuevo ticket de soporte" alert email that Mission
-// Control fires the instant a customer raises a ticket (api/ingest/ticket.js).
+// Control fires the instant a customer raises a ticket (api/_lib/ingest/ticket.js).
 // This is an OPERATIONS notice to the ACACIA support desk — not a customer
 // message — so it leads with the system ticket id, the SLA deadline, and every
 // field an operator needs to triage without opening anything: app, requester,
