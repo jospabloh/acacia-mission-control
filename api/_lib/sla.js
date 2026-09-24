@@ -1,6 +1,6 @@
 // ITIL-style SLA policy for support tickets. One place owns the response/
 // resolution targets per priority; both the real-time push ingest
-// (api/ingest/ticket.js) and the daily sync (sync/ticketMapping.js) compute the
+// (api/_lib/ingest/ticket.js) and the daily sync (sync/ticketMapping.js) compute the
 // same due timestamps from it, so the clock is identical no matter how a ticket
 // reached the bodega.
 //

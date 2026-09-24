@@ -6,8 +6,8 @@
 // `type` ('soporte'|'mejora'|'idea') is optional — omitted, it's an ordinary
 // sales lead same as always. Set by acaciaco-site's Soporte a Apps form
 // (Fase 1, docs/superpowers/specs/2026-08-24-soporte-apps-design.md there).
-import { supabaseAdmin, requireSupabase } from '../_lib/supabaseAdmin.js'
-import { normalizeLeadType } from '../_lib/leadType.js'
+import { supabaseAdmin, requireSupabase } from '../supabaseAdmin.js'
+import { normalizeLeadType } from '../leadType.js'
 
 const cap = (v, n) => (v == null ? null : String(v).slice(0, n))
 const looksEmail = (e) => typeof e === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)
