@@ -92,7 +92,7 @@ export async function processIncomingTicket({ app, record }) {
   if (bridgeConfigured()) {
     for (const to of alertRecipients()) {
       try {
-        await callBridge(app, 'emails.sendFollowup', { to, subject: alert.subject, html: alert.html })
+        await callBridge(app, 'emails.sendFollowup', { to, subject: alert.subject, html: alert.html, internal: true })
         email.sent.push(to)
       } catch (e) {
         email.failed.push({ to, error: e.message })
