@@ -264,8 +264,13 @@ export function Callout({ tone = 'neutral', children }) {
 // se quedan hasta que se cierran, porque un error que desaparece solo es un
 // error que nadie leyó.
 export function ToastStack({ toasts, onDismiss }) {
+  // bottom-left, not bottom-right: the corner theme switcher (ThemeSwitcher.jsx)
+  // is pinned bottom-right in every app of the portfolio, and a stack of toasts
+  // sharing that corner sits on top of it (z-[60] over the switcher's z-50) for
+  // as long as an error toast is up — which per this file's own rule can be
+  // indefinitely. Toasts are this app's own file, so they're the one that moves.
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 left-4 z-[60] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
       {toasts.map((t) => (
         <div
           key={t.id} role="status"
