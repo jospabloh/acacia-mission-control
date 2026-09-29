@@ -84,11 +84,11 @@ export async function notifyNewTenant({ app, mapped, via }) {
     }
     // The alert row goes first: it is the idempotency record, so a crash between
     // row and email can under-notify once but never spam.
-    await supabaseAdmin.from('alerts').insert({
+    const { data: inserted } = await supabaseAdmin.from('alerts').insert({
       app_id: app.id, severity: 'info', kind: 'new_tenant',
       title: `Nuevo cliente en ${ctx.appName}: ${ctx.tenantName || externalId}`.slice(0, 200),
       detail: { external_id: externalId, tenant_name: ctx.tenantName, created_by: ctx.createdBy, plan: ctx.plan, via },
-    })
+    }).select('id, detail')
 
     const { subject, html } = renderNewTenantAlert(ctx)
     const email = { sent: [], failed: [] }
@@ -103,6 +103,14 @@ export async function notifyNewTenant({ app, mapped, via }) {
           email.failed.push({ to, error: e.message })
         }
       }
+    }
+    // Record what the email did. Without this a lost notice was indistinguishable
+    // from a sent one: the row only proved MC *tried* (2026-09-29).
+    const row = inserted?.[0]
+    if (row?.id) {
+      await supabaseAdmin.from('alerts').update({
+        detail: { ...row.detail, email: { sent: email.sent, failed: email.failed, bridge: bridgeConfigured() } },
+      }).eq('id', row.id)
     }
     return { externalId, notified: true, email }
   } catch (e) {

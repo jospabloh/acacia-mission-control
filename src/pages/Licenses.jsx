@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { licenseAction, deletePremiumData, licenseSetDates, licenseCancel, licenseRecord } from '../lib/control.js'
+import { licenseAction, deletePremiumData, licenseSetDates, licenseCancel, licenseRecord, listContacts, sendMessage } from '../lib/control.js'
 import { capabilitiesFor, lifecyclePosition, LIFECYCLE_STAGES } from '../lib/licenseCatalog.js'
 import { useAuth, roleAtLeast } from '../lib/auth/useAuth.js'
 import { useToasts } from '../lib/useToasts.js'
@@ -120,6 +120,19 @@ function LifecycleRail({ expiry }) {
   )
 }
 
+// De quién es la licencia: cada app guarda al dueño en un campo distinto, y
+// StockFlow sólo trae el correo de quien creó el negocio (`created_by`).
+const ownerOf = (r) =>
+  r.raw?.owner_email ?? r.raw?.contact_email ?? r.raw?.admin_email ?? r.raw?.created_by ?? null
+
+// Correos de seguimiento que se pueden mandar desde el renglón. Los tipos son
+// los que acepta api/_lib/control/send-message.js.
+const FOLLOWUP_TYPES = [
+  { value: 'renewal', label: 'Recordatorio de renovación', hint: 'Avisa que la licencia vence (o ya venció) e invita a renovar.' },
+  { value: 'renewal_fyi', label: 'Aviso de vencimiento (informativo)', hint: 'Para quien ya está en un plan: solo informa la fecha.' },
+  { value: 'trial_offer', label: 'Invitación a activar el plan', hint: 'Para quien está en prueba o nunca contrató.' },
+]
+
 // ── Página ───────────────────────────────────────────────────────────────────
 const VIEWS = [
   { value: 'attention', label: 'Requieren atención' },
@@ -149,6 +162,7 @@ export function Licenses() {
   const [confirm, setConfirm] = useState(null) // cambio de estado / plan / add-on
   const [pay, setPay] = useState(null)
   const [dates, setDates] = useState(null)
+  const [followup, setFollowup] = useState(null) // { row, type, contacts, loading, error }
   const [cancel, setCancel] = useState(null)
   const [purge, setPurge] = useState(null)
   const [del, setDel] = useState(null) // borrado de datos Premium (cateqhub)
@@ -223,7 +237,7 @@ export function Licenses() {
         if (view === 'active') return r.status === capabilitiesFor(r.app_id)?.statuses.active
         return true
       })
-      .filter((r) => !needle || [r.tenants?.name, r.apps?.name, r.app_id, r.external_id, r.plan, statusLabel(r.status)]
+      .filter((r) => !needle || [r.tenants?.name, ownerOf(r), r.apps?.name, r.app_id, r.external_id, r.plan, statusLabel(r.status)]
         .some((f) => String(f ?? '').toLowerCase().includes(needle)))
       // Lo más urgente arriba: la fecha más vieja primero, sin fecha al final.
       .sort((a, b) => {
@@ -369,6 +383,31 @@ export function Licenses() {
     setDates({ row })
   }
 
+  // Correo de seguimiento a los administradores de ESTA licencia. Los contactos
+  // salen de la app por el puente (mismo camino que Comunicados), así que el
+  // destinatario es siempre el que la app tiene hoy, no una copia vieja.
+  const askFollowup = async (row) => {
+    const type = row.status === 'trial' ? 'trial_offer' : 'renewal'
+    setFollowup({ row, type, contacts: [], loading: true, error: null })
+    try {
+      const out = await listContacts(row.app_id)
+      const mine = (out.contacts ?? []).filter((c) => String(c.id) === String(row.external_id))
+      setFollowup((f) => (f?.row.id === row.id ? { ...f, contacts: mine, loading: false } : f))
+    } catch (e) {
+      setFollowup((f) => (f?.row.id === row.id ? { ...f, loading: false, error: e.message } : f))
+    }
+  }
+
+  const runFollowup = () => withBusy(async () => {
+    const { row, type, contacts } = followup
+    try {
+      const out = await sendMessage({ appId: row.app_id, type, recipients: contacts })
+      setFollowup(null)
+      if (out.failed) fail(`Se envió a ${out.sent} y falló ${out.failed}: ${out.results.find((x) => x.error)?.error ?? ''}`)
+      else ok(`Correo enviado a ${out.sent} · ${nameOf(row)}`)
+    } catch (e) { fail(e.message) }
+  })
+
   const askCancel = (row) => { setReason(''); setTyped(''); setCancel({ row }) }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -393,6 +432,7 @@ export function Licenses() {
       caps.hasViewOnly && r.status !== caps.statuses.view_only && { label: 'Pasar a solo lectura', onClick: () => askStatus(r, 'view_only') },
       r.status !== caps.statuses.suspend && { label: 'Pausar', onClick: () => askStatus(r, 'suspend') },
       { separator: true },
+      { label: 'Enviar correo de seguimiento…', hint: 'Renovación, vencimiento o invitación a activar el plan.', onClick: () => askFollowup(r) },
       caps.plans.length > 1 && { label: 'Cambiar plan…', onClick: () => askPlan(r) },
       (caps.hasExpiry || caps.hasTrial) && { label: 'Editar fechas…', hint: 'Vencimiento y fin de prueba, a mano.', onClick: () => askDates(r) },
       caps.hasBilling && { label: r.auto_renew ? 'Quitar cobro automático' : 'Marcar cobro automático', onClick: () => toggleAutoRenew(r) },
@@ -455,6 +495,8 @@ export function Licenses() {
           <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute">Identificadores</div>
           <dl className="mt-1.5 space-y-1 text-xs text-ink-soft">
             <div className="flex gap-2"><dt className="w-24 shrink-0 text-ink-faint">App</dt><dd className="font-mono">{r.app_id}</dd></div>
+            {ownerOf(r) && <div className="flex gap-2"><dt className="w-24 shrink-0 text-ink-faint">Dueño</dt><dd className="break-all">{ownerOf(r)}</dd></div>}
+            {r.raw?.created_date && <div className="flex gap-2"><dt className="w-24 shrink-0 text-ink-faint">Alta</dt><dd className="tabular-nums">{fmtDate(r.raw.created_date)}</dd></div>}
             <div className="flex gap-2"><dt className="w-24 shrink-0 text-ink-faint">Licencia</dt><dd className="break-all font-mono">{r.external_id}</dd></div>
             {r.seats != null && <div className="flex gap-2"><dt className="w-24 shrink-0 text-ink-faint">Usuarios</dt><dd className="tabular-nums">{r.seats}</dd></div>}
             <div className="flex gap-2"><dt className="w-24 shrink-0 text-ink-faint">Prueba</dt><dd className="tabular-nums">{fmtDate(r.trial_ends_at)}</dd></div>
@@ -570,7 +612,10 @@ export function Licenses() {
                               {r.tenants?.name ?? r.external_id}
                             </span>
                           </button>
-                          <div className="ml-[18px] truncate text-xs text-ink-mute">{r.apps?.name ?? r.app_id}</div>
+                          <div className="ml-[18px] truncate text-xs text-ink-mute">
+                            {r.apps?.name ?? r.app_id}
+                            {ownerOf(r) && <> · <span title="Quién dio de alta / es dueño de la licencia">{ownerOf(r)}</span></>}
+                          </div>
                         </div>
 
                         {/* Plan */}
@@ -642,6 +687,45 @@ export function Licenses() {
         <p className="mt-3 text-xs text-ink-faint">
           Se escribe directamente en la app vía <code className="font-mono">acaciaControl</code>, como <code className="font-mono">role:admin</code>.
         </p>
+      </Modal>
+
+      {/* ── Correo de seguimiento ── */}
+      <Modal
+        open={!!followup} busy={busy} onClose={() => setFollowup(null)}
+        title="Enviar correo de seguimiento"
+        subtitle={followup && <>{followup.row.apps?.name ?? followup.row.app_id} · <span className="font-medium text-ink">{nameOf(followup.row)}</span></>}
+        footer={
+          <>
+            <Button onClick={() => setFollowup(null)} disabled={busy}>Cancelar</Button>
+            <Button variant="primary" onClick={runFollowup} disabled={busy || followup?.loading || !followup?.contacts.length}>
+              {busy ? 'Enviando…' : 'Enviar correo'}
+            </Button>
+          </>
+        }
+      >
+        {followup && (
+          <>
+            <Field label="Tipo de correo" hint={FOLLOWUP_TYPES.find((t) => t.value === followup.type)?.hint}>
+              <Select value={followup.type} onChange={(e) => setFollowup((f) => ({ ...f, type: e.target.value }))}>
+                {FOLLOWUP_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+            </Field>
+            <div className="mt-4 text-sm text-ink-soft">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute">Se enviará a</div>
+              {followup.loading && <p className="mt-1.5">Buscando contactos en la app…</p>}
+              {followup.error && <Callout tone="warn">No se pudieron leer los contactos: {followup.error}</Callout>}
+              {!followup.loading && !followup.error && followup.contacts.length === 0 && (
+                <Callout tone="warn">Esta licencia no tiene un administrador con correo en la app: no hay a quién escribirle.</Callout>
+              )}
+              <ul className="mt-1.5 space-y-0.5">
+                {followup.contacts.map((c) => <li key={c.email} className="font-medium text-ink">{c.email}</li>)}
+              </ul>
+            </div>
+            <p className="mt-3 text-xs text-ink-faint">
+              Es un correo al cliente: sale de la app vía <code className="font-mono">acaciaControl</code> y queda en la bitácora.
+            </p>
+          </>
+        )}
       </Modal>
 
       {/* ── Confirmar pago ── */}
