@@ -74,3 +74,25 @@ export function renderTicketAlert(ctx) {
 
   return { subject, html }
 }
+
+// Internal notice that a customer answered on a ticket support already knew
+// about (apps with notifyCustomerReplies, today sommel). Same audience as the
+// new-ticket alert; it quotes the reply so nobody has to open the panel to read it.
+// ctx: { appName, ticketId, subject, requesterName, reply, repliedAt, link }
+export function renderReplyAlert(ctx) {
+  const subject = `💬 [${ctx.appName}] ${ctx.ticketId} — Respondió el cliente: ${ctx.subject || 'ticket de soporte'}`
+  const body = esc(ctx.reply).replace(/\r?\n/g, '<br>')
+  const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#2a2a33">
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8a8780">ACACIA Mission Control · ${esc(ctx.appName)}</p>
+  <p style="margin:0 0 14px;font-size:16px;font-weight:600;color:#0e0d14">El cliente respondió en un ticket</p>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+    ${row('Folio', ctx.ticketId)}
+    ${row('Asunto', ctx.subject)}
+    ${row('Quién', ctx.requesterName)}
+    ${row('Cuándo', fmtWhen(ctx.repliedAt))}
+  </table>
+  <div style="border-left:3px solid #3b6ef8;background:#f6f5f2;border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.55">${body}</div>
+  ${ctx.link ? `<p style="margin:18px 0 0"><a href="${esc(ctx.link)}" style="color:#3b6ef8;font-weight:600">Abrir en Soporte</a></p>` : ''}
+</div>`
+  return { subject, html }
+}

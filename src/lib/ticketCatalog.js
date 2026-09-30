@@ -16,7 +16,7 @@ export const TICKET_CATALOG = {
   ctrlhq: { name: 'CtrlHQ', statuses: ['submitted', 'resolved'], closeStatus: 'resolved', canReply: true },
   kitchops: { name: 'KitchOps', statuses: ['submitted', 'in_progress', 'waiting_customer', 'resolved'], closeStatus: 'resolved', canReply: true },
   artiskids: { name: 'ArtisKids', statuses: ['open', 'resolved', 'closed'], closeStatus: 'closed', canReply: false },
-  sommel: { name: 'Sommel', statuses: ['abierto', 'en_proceso', 'cerrado'], closeStatus: 'cerrado', canReply: false },
+  sommel: { name: 'Sommel', statuses: ['abierto', 'en_proceso', 'cerrado'], closeStatus: 'cerrado', canReply: true },
   rumbo: { name: 'Rumbo', statuses: ['open', 'in_progress', 'resolved', 'closed'], closeStatus: 'closed', canReply: true },
 }
 

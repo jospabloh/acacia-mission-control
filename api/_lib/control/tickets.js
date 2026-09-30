@@ -38,7 +38,10 @@ export default async function handler(req, res) {
     if (!cfg.thread) return res.status(200).json({ ok: true, messages: originalMessageThread(ticket.raw) })
     if (cfg.thread.mode === 'inline') {
       const arr = Array.isArray(ticket.raw?.[cfg.thread.arrayField]) ? ticket.raw[cfg.thread.arrayField] : []
-      return res.status(200).json({ ok: true, messages: sort(arr.map((m) => normalizeMessage(appId, m))) })
+      const replies = sort(arr.map((m) => normalizeMessage(appId, m)))
+      // The first message lives on the ticket itself (sommel's `body`), not in the array.
+      const first = cfg.thread.includeOriginal ? originalMessageThread(ticket.raw) : []
+      return res.status(200).json({ ok: true, messages: [...first, ...replies] })
     }
     if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
     const { data: app } = await supabaseAdmin.from('apps').select('*').eq('id', appId).maybeSingle()
