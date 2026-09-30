@@ -75,6 +75,13 @@ export const LICENSE_CATALOG = {
     hasBilling: true, hasViewOnly: true, hasExpiry: true, hasTrial: true,
     dateFormat: 'datetime', dayConvention: 'preserve_day', addons: [],
   },
+  // Sin planes todavía: los nombres están por decidir (ver licenseControl.js).
+  sommel: {
+    plans: [],
+    statuses: { active: 'active', suspend: 'suspended', view_only: 'view_only', cancel: 'suspended' },
+    hasBilling: true, hasViewOnly: true, hasExpiry: true, hasTrial: true,
+    dateFormat: 'datetime', dayConvention: 'preserve_day', addons: [],
+  },
 }
 
 // `null` para una app sin control de licencia (freeware, sitios, apps sin
