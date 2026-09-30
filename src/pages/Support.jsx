@@ -22,12 +22,15 @@ const STATUS_TONE = {
   waiting_user: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300', waiting_customer: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
   escalated: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300', resolved: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
   ai_resolved: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300', closed: 'bg-paper-subtle text-ink-mute',
+  // Sommel's statuses are in Spanish.
+  abierto: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', en_proceso: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  cerrado: 'bg-paper-subtle text-ink-mute',
 }
 const PRIO_TONE = {
   urgent: 'text-red-700 dark:text-red-300 font-semibold', high: 'text-amber-700 dark:text-amber-300 font-medium',
   normal: 'text-ink-soft', low: 'text-ink-faint',
 }
-const OPEN_ISH = new Set(['open', 'in_progress', 'waiting_user', 'waiting_customer', 'escalated'])
+const OPEN_ISH = new Set(['open', 'in_progress', 'waiting_user', 'waiting_customer', 'escalated', 'abierto', 'en_proceso'])
 
 const tone = (s) => STATUS_TONE[String(s ?? '').toLowerCase()] ?? 'bg-paper-subtle text-ink-mute'
 const isOpen = (s) => OPEN_ISH.has(String(s ?? '').toLowerCase())

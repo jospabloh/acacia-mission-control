@@ -274,6 +274,24 @@ const APPS = {
     billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: 'ref', dayConvention: 'preserve_day' },
     lifecycle: { paidPlanValues: ['recuerdos'], graceDaysToReadOnly: 8, graceDaysToBlocked: 15, graceDaysToInactive: 30, graceDaysToDeletionEligible: 45, readOnlyStatus: 'view_only', blockedStatus: 'suspended' },
   },
+  // Sommel (jospabloh/sommel) — registered 2026-09-30. POS for wine bars:
+  // tenant = WineBar, which carries billing_status / plan / trial_end_at /
+  // current_period_end. Its acaciaControl is stricter than the rest of the
+  // portfolio: license.set accepts ONLY those four fields (anything else is a
+  // 400), so `payment: null` — there is no payment_reference to stamp, and
+  // confirm_payment just advances current_period_end.
+  //
+  // `plans: []` and NO `lifecycle` on purpose: the plan names are still an open
+  // decision (docs/estandar-plan.md in the sommel repo, "Nombres de plan y modo
+  // de cobro"). The lifecycle cron only acts on paidPlanValues, so an invented
+  // plan name here would either never match or, worse, start suspending bars
+  // on a name nobody agreed to. Add both once the plan is decided.
+  sommel: {
+    entity: 'WineBar', statusField: 'billing_status', planField: 'plan',
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
+    plans: [],
+    billing: { expiryField: 'current_period_end', trialField: 'trial_end_at', dateFormat: 'datetime', payment: null, dayConvention: 'preserve_day' },
+  },
 }
 
 export function licenseControlFor(appId) {

@@ -151,6 +151,21 @@ const APPS = {
     activityField: 'last_activity_at',
     thread: null,
   },
+  // Sommel: registered 2026-09-30. SupportTicket has a single `body`, no
+  // thread entity, and its statuses are in Spanish (abierto / en_proceso /
+  // cerrado). Its acaciaControl does not implement tickets.update or
+  // tickets.thread yet, so `thread: null` (buildTicketReply refuses) and the
+  // Support page offers no status change for it (absent from its STATUSES).
+  // Tickets still sync in and show in the inbox, which is what Module 8 needs.
+  sommel: {
+    entity: 'SupportTicket', tenantField: 'tenant_id',
+    subjectField: 'subject', statusField: 'status', priorityField: null,
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['abierto', 'en_proceso', 'cerrado'],
+    openStatus: 'abierto', inProgressStatus: 'en_proceso',
+    resolvedField: null, closedField: null,
+    thread: null,
+  },
   rumbo: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
     subjectField: 'subject', statusField: 'status', priorityField: 'priority',

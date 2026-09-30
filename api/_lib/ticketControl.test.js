@@ -7,7 +7,7 @@ const NOW_ISO = NOW.toISOString()
 
 // ── every app that persists tickets ──────────────────────────────────────────
 test('all portfolio apps have ticket configs', () => {
-  assert.deepEqual(ticketApps().sort(), ['artiskids', 'cateqhub', 'ctrlhq', 'flowfin', 'kitchops', 'liuma', 'puntos', 'radar', 'rumbo', 'stockflow'])
+  assert.deepEqual(ticketApps().sort(), ['artiskids', 'cateqhub', 'ctrlhq', 'flowfin', 'kitchops', 'liuma', 'puntos', 'radar', 'rumbo', 'sommel', 'stockflow'])
 })
 
 // ── artiskids: status changes work, replies don't (no thread entity yet) ────
