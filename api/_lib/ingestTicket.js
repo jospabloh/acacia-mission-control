@@ -18,7 +18,8 @@ import { supabaseAdmin, audit } from './supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from './appBridge.js'
 import { mapTicketRecord } from './sync/ticketMapping.js'
 import { normalizePriority } from './sla.js'
-import { renderTicketAlert } from './ticketAlert.js'
+import { renderTicketAlert, renderReplyAlert } from './ticketAlert.js'
+import { newCustomerReplies } from './ticketControl.js'
 
 // Who gets the internal new-ticket alert. Overridable via env; defaults to the
 // support desk + (temporarily) the owner's personal inbox.
@@ -31,6 +32,34 @@ export function alertRecipients() {
 
 // Severity for the optional dashboard alert row, from the SLA tier.
 const SEVERITY_BY_TIER = { urgent: 'critical', high: 'warning', normal: 'info', low: 'info' }
+
+// One internal alert per new customer reply. Best-effort, like the new-ticket
+// alert: it never throws, it reports what was sent.
+async function sendReplyAlerts(app, ticket, replies) {
+  const email = { sent: [], failed: [] }
+  if (!bridgeConfigured()) { email.failed.push({ error: 'INGEST_HMAC_SECRET/bridge no configurado' }); return email }
+  const link = process.env.MC_PUBLIC_URL ? `${process.env.MC_PUBLIC_URL.replace(/\/$/, '')}/support` : null
+  const text = replies.map((r) => r.body ?? '').filter(Boolean).join('\n\n')
+  const last = replies[replies.length - 1] ?? {}
+  const alert = renderReplyAlert({
+    appName: app.name || app.id,
+    ticketId: ticket.ticket_number || ticket.external_id,
+    subject: ticket.subject,
+    requesterName: last.author_name ?? ticket.requester?.email ?? null,
+    reply: text,
+    repliedAt: last.created_at ?? null,
+    link,
+  })
+  for (const to of alertRecipients()) {
+    try {
+      await callBridge(app, 'emails.sendFollowup', { to, subject: alert.subject, html: alert.html, internal: true })
+      email.sent.push(to)
+    } catch (e) {
+      email.failed.push({ to, error: e.message })
+    }
+  }
+  return email
+}
 
 // Process one raw ticket record into the bodega + notification. `app` is the
 // registry row (must already be resolved by the caller). Returns a plain result
@@ -50,7 +79,7 @@ export async function processIncomingTicket({ app, record }) {
 
   // Has this ticket already been notified? (idempotency across retries / repeat pings.)
   const { data: existing } = await supabaseAdmin
-    .from('tickets').select('id, notified_at').eq('app_id', appId).eq('external_id', ticket.external_id).maybeSingle()
+    .from('tickets').select('id, notified_at, raw').eq('app_id', appId).eq('external_id', ticket.external_id).maybeSingle()
   const alreadyNotified = Boolean(existing?.notified_at)
   const nowISO = new Date().toISOString()
 
@@ -63,9 +92,17 @@ export async function processIncomingTicket({ app, record }) {
   const { error: upErr } = await supabaseAdmin.from('tickets').upsert(row, { onConflict: 'app_id,external_id' })
   if (upErr) throw new Error(`tickets upsert: ${upErr.message}`)
 
-  // Already notified → reflect-only (a retry, or an update). Done.
+  // Already notified → reflect-only (a retry, or an update), unless the
+  // customer answered since the copy MC had: then support hears about it.
   if (alreadyNotified) {
-    return { ok: true, ticket: ticket.external_id, notified: false, reason: 'ya notificado' }
+    const replies = newCustomerReplies(appId, existing?.raw, record)
+    if (replies.length === 0) return { ok: true, ticket: ticket.external_id, notified: false, reason: 'ya notificado' }
+    const email = await sendReplyAlerts(app, ticket, replies)
+    await audit('ingest:ticket-reply', {
+      target_app: appId, target_type: 'ticket', target_id: ticket.external_id,
+      payload: { replies: replies.length, email_sent: email.sent.length, email_failed: email.failed.length },
+    })
+    return { ok: true, ticket: ticket.external_id, notified: true, reason: 'respuesta del cliente', email }
   }
 
   // ── Notification fan-out (once) ──────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketApps } from './ticketControl.js'
+import { buildTicketReply, buildTicketStatus, newCustomerReplies, normalizeMessage, originalMessageThread, ticketApps } from './ticketControl.js'
 
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
@@ -182,4 +182,38 @@ test('normalizeMessage flags staff by each app author role', () => {
   assert.equal(normalizeMessage('liuma', { author_role: 'REQUESTER', body: 'a' }).staff, false)
   assert.equal(normalizeMessage('rumbo', { author_role: 'support', body: 'a' }).staff, true)
   assert.equal(normalizeMessage('rumbo', { author_role: 'requester', body: 'a' }).staff, false)
+})
+
+// ── apps without a thread: the original message is the conversation ─────────
+test('originalMessageThread devuelve el mensaje del cliente (sommel: body)', () => {
+  const out = originalMessageThread({ body: 'No imprime', created_by_email: 'a@b.mx', created_date: '2026-09-30T20:00:00Z' })
+  assert.deepEqual(out, [{ staff: false, name: 'a@b.mx', body: 'No imprime', ts: '2026-09-30T20:00:00Z' }])
+})
+
+test('originalMessageThread lee `message` (artiskids) y no inventa nada si no hay texto', () => {
+  assert.equal(originalMessageThread({ message: 'Hola' })[0].body, 'Hola')
+  assert.deepEqual(originalMessageThread({}), [])
+  assert.deepEqual(originalMessageThread(null), [])
+})
+
+// ── sommel: conversation inline in responses[] ───────────────────────────────
+test('sommel responde como acacia en responses[] y pasa de abierto a en_proceso', () => {
+  const out = buildTicketReply('sommel', { ticketRaw: { id: 's1', status: 'abierto', responses: [] }, body: 'Ya quedó', actorEmail: 'op@acacia.mx', now: NOW })
+  assert.equal(out.error, undefined)
+  assert.equal(out.appendField, 'responses')
+  assert.deepEqual(out.appendItem, { author_name: 'ACACIA Soporte', author_role: 'acacia', body: 'Ya quedó', created_at: NOW_ISO })
+  // Exactly what Sommel's bridge accepts in patch: status and last_activity_at.
+  assert.deepEqual(out.patch, { status: 'en_proceso', last_activity_at: NOW_ISO })
+})
+
+test('newCustomerReplies: solo lo que el bar escribió desde la última copia', () => {
+  const prev = { responses: [{ author_role: 'bar', body: 'a' }, { author_role: 'acacia', body: 'b' }] }
+  const next = { responses: [...prev.responses, { author_role: 'acacia', body: 'c' }, { author_role: 'bar', body: 'd' }] }
+  assert.deepEqual(newCustomerReplies('sommel', prev, next).map((m) => m.body), ['d'])
+  // The same record pinged twice alerts once.
+  assert.deepEqual(newCustomerReplies('sommel', next, next), [])
+  // First sight of a ticket with no copy yet: every bar message is new.
+  assert.equal(newCustomerReplies('sommel', null, next).length, 2)
+  // Apps that did not opt in never alert on replies.
+  assert.deepEqual(newCustomerReplies('rumbo', { responses: [] }, { responses: [{ author_role: 'requester', body: 'x' }] }), [])
 })

@@ -151,12 +151,13 @@ const APPS = {
     activityField: 'last_activity_at',
     thread: null,
   },
-  // Sommel: registered 2026-09-30. SupportTicket has a single `body`, no
-  // thread entity, and its statuses are in Spanish (abierto / en_proceso /
-  // cerrado). Its acaciaControl does not implement tickets.update or
-  // tickets.thread yet, so `thread: null` (buildTicketReply refuses) and the
-  // Support page offers no status change for it (absent from its STATUSES).
-  // Tickets still sync in and show in the inbox, which is what Module 8 needs.
+  // Sommel: registered 2026-09-30; conversation added the same day. Its
+  // SupportTicket keeps the customer's first message in `body` and the rest of
+  // the conversation INLINE in `responses[]` (like rumbo), with its own Spanish
+  // statuses. `includeOriginal` puts `body` first in the thread the panel shows;
+  // `notifyCustomerReplies` makes the ingest path alert support when the bar
+  // answers on a ticket MC already knew about. Its bridge only accepts replies
+  // with author_role 'acacia' and emails the bar when one lands.
   sommel: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
     subjectField: 'subject', statusField: 'status', priorityField: null,
@@ -164,7 +165,13 @@ const APPS = {
     statuses: ['abierto', 'en_proceso', 'cerrado'],
     openStatus: 'abierto', inProgressStatus: 'en_proceso',
     resolvedField: null, closedField: null,
-    thread: null,
+    activityField: 'last_activity_at',
+    thread: {
+      mode: 'inline', arrayField: 'responses',
+      bodyField: 'body', roleField: 'author_role', staffRole: 'acacia', customerRole: 'bar',
+      nameField: 'author_name', tsField: 'created_at',
+      includeOriginal: true, notifyCustomerReplies: true,
+    },
   },
   rumbo: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
@@ -188,6 +195,28 @@ export function ticketControlFor(appId) {
 
 export function ticketApps() {
   return Object.keys(APPS)
+}
+
+// For an app with `thread: null` (artiskids, sommel) the conversation is just
+// the customer's original message on the ticket itself. Returned in the same
+// normalized shape as normalizeMessage so the panel renders it like any thread.
+export function originalMessageThread(raw) {
+  const r = raw ?? {}
+  const body = r.body ?? r.message ?? r.description ?? null
+  if (!body) return []
+  return [{ staff: false, name: r.created_by_email ?? null, body: String(body), ts: r.created_date ?? r.created_at ?? null }]
+}
+
+// Customer messages on `nextRaw` that were not on `prevRaw` — for apps whose
+// thread sets notifyCustomerReplies. Counted, not diffed by content, so the
+// same record pinged twice yields nothing the second time.
+export function newCustomerReplies(appId, prevRaw, nextRaw) {
+  const t = APPS[appId]?.thread
+  if (!t || t.mode !== 'inline' || !t.notifyCustomerReplies) return []
+  const mine = (raw) => (Array.isArray(raw?.[t.arrayField]) ? raw[t.arrayField] : [])
+    .filter((m) => m && m[t.roleField] === t.customerRole)
+  const before = mine(prevRaw).length
+  return mine(nextRaw).slice(before)
 }
 
 export function ticketStatusesFor(appId) {

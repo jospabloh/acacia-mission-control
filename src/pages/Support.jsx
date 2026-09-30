@@ -2,23 +2,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { runSync, ticketThread, ticketAction } from '../lib/control.js'
 import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import { TICKET_APPS, TICKET_CATALOG, isOpenTicket } from '../lib/ticketCatalog.js'
 
-// Apps that persist tickets + their valid status values (mirror of
-// api/_lib/ticketControl.js). stockflow (email-only) and flowfin (none) are absent.
-const TICKET_APPS = [
-  { id: 'puntos', name: 'Puntos+' }, { id: 'stockflow', name: 'StockFlow' }, { id: 'flowfin', name: 'FlowFin' },
-  { id: 'rumbo', name: 'Rumbo' }, { id: 'liuma', name: 'LIUMA' },
-]
-const STATUSES = {
-  puntos: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
-  stockflow: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
-  flowfin: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
-  rumbo: ['open', 'in_progress', 'resolved', 'closed'],
-  liuma: ['OPEN', 'IN_PROGRESS', 'WAITING_USER', 'ESCALATED', 'RESOLVED', 'CLOSED'],
-}
 // Status → tone, case-insensitive.
 const STATUS_TONE = {
-  open: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', in_progress: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+  open: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', submitted: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', in_progress: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
   waiting_user: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300', waiting_customer: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
   escalated: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300', resolved: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
   ai_resolved: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300', closed: 'bg-paper-subtle text-ink-mute',
@@ -30,10 +18,9 @@ const PRIO_TONE = {
   urgent: 'text-red-700 dark:text-red-300 font-semibold', high: 'text-amber-700 dark:text-amber-300 font-medium',
   normal: 'text-ink-soft', low: 'text-ink-faint',
 }
-const OPEN_ISH = new Set(['open', 'in_progress', 'waiting_user', 'waiting_customer', 'escalated', 'abierto', 'en_proceso'])
 
 const tone = (s) => STATUS_TONE[String(s ?? '').toLowerCase()] ?? 'bg-paper-subtle text-ink-mute'
-const isOpen = (s) => OPEN_ISH.has(String(s ?? '').toLowerCase())
+const isOpen = isOpenTicket
 function fmtWhen(v) {
   if (!v) return '—'
   const d = new Date(v)
@@ -191,7 +178,7 @@ export function Support() {
 
   return (
     <div>
-      <PageHeader title="Soporte" subtitle="Bandeja unificada de tickets de las 5 apps. Responde y cambia el estado sin entrar a cada una.">
+      <PageHeader title="Soporte" subtitle="Bandeja unificada de tickets de todas las apps. Responde y cambia el estado sin entrar a cada una.">
         <button onClick={syncAll} disabled={syncing}
           className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">
           {syncing ? 'Sincronizando…' : 'Sincronizar'}
@@ -262,11 +249,19 @@ export function Support() {
                       {sel.apps?.name ?? sel.app_id} · {sel.tenants?.name ?? sel.requester?.email ?? sel.requester?.name ?? '—'}
                     </p>
                   </div>
-                  <select value="" onChange={(e) => e.target.value && changeStatus(e.target.value)} disabled={busy}
-                    className="shrink-0 rounded-md border border-hair bg-paper-card px-2 py-1 text-xs text-ink disabled:opacity-50">
-                    <option value="">Estado: {sel.status ?? '—'}…</option>
-                    {(STATUSES[sel.app_id] ?? []).filter((s) => s !== sel.status).map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    {isOpen(sel.status) && TICKET_CATALOG[sel.app_id]?.closeStatus && (
+                      <button onClick={() => changeStatus(TICKET_CATALOG[sel.app_id].closeStatus)} disabled={busy}
+                        className="rounded-md border border-hair px-2.5 py-1 text-xs font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">
+                        Cerrar ticket
+                      </button>
+                    )}
+                    <select value="" onChange={(e) => e.target.value && changeStatus(e.target.value)} disabled={busy}
+                      className="rounded-md border border-hair bg-paper-card px-2 py-1 text-xs text-ink disabled:opacity-50">
+                      <option value="">Estado: {sel.status ?? '—'}…</option>
+                      {(TICKET_CATALOG[sel.app_id]?.statuses ?? []).filter((s) => s !== sel.status).map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
 
                 {sel.raw?.ai_brief && <div className="mt-4"><AiBrief brief={sel.raw.ai_brief} /></div>}
@@ -287,6 +282,11 @@ export function Support() {
                   ))}
                 </div>
 
+                {TICKET_CATALOG[sel.app_id]?.canReply === false ? (
+                  <p className="mt-4 border-t border-hair pt-4 text-xs text-ink-faint">
+                    {sel.apps?.name ?? sel.app_id} todavía no recibe respuestas desde el panel: responde al cliente por correo y cierra el ticket aquí.
+                  </p>
+                ) : (
                 <div className="mt-4 border-t border-hair pt-4">
                   <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder="Escribe una respuesta como ACACIA Soporte…"
                     className="w-full rounded-lg border border-hair bg-paper-card px-3 py-2 text-sm text-ink placeholder:text-ink-faint" />
@@ -298,6 +298,7 @@ export function Support() {
                     </button>
                   </div>
                 </div>
+                )}
               </>
             )}
           </div>
