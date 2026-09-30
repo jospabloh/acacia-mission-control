@@ -1,6 +1,7 @@
 import { PageHeader, StatCard } from '../components/PageHeader.jsx'
 import { PortfolioSections } from '../components/PortfolioSections.jsx'
 import { usePortfolioData } from '../lib/usePortfolioData.js'
+import { OpenTicketsPanel } from '../components/OpenTicketsPanel.jsx'
 
 export function Dashboard() {
   const { apps, stats, byApp, sessByApp, error, hasKpis, byCat, totals } = usePortfolioData()
@@ -17,6 +18,10 @@ export function Dashboard() {
         <StatCard label="Tenants" value={totals.tenants} hint="clientes sincronizados" to="/tenants" />
         <StatCard label="Licencias activas" value={totals.active} hint="al día de hoy" to="/licenses" />
         <StatCard label="Sesiones activas" value={totals.sessions} hint={`${totals.online} en línea ahora`} to="/sessions" />
+      </div>
+
+      <div className="mt-6">
+        <OpenTicketsPanel />
       </div>
 
       <div className="mt-9">

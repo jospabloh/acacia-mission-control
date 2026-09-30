@@ -8,7 +8,7 @@
 import { supabaseAdmin, requireSupabase, audit } from '../supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from '../appBridge.js'
 import { requireMember } from '../requireMember.js'
-import { ticketControlFor, normalizeMessage, buildTicketReply, buildTicketStatus } from '../ticketControl.js'
+import { ticketControlFor, normalizeMessage, buildTicketReply, buildTicketStatus, originalMessageThread } from '../ticketControl.js'
 import { syncTicketsForApp } from '../sync/syncTickets.js'
 
 export default async function handler(req, res) {
@@ -34,6 +34,8 @@ export default async function handler(req, res) {
 
   // ── READ: thread ───────────────────────────────────────────────────────────
   if (op === 'thread') {
+    // No thread entity (artiskids, sommel): the original message is the thread.
+    if (!cfg.thread) return res.status(200).json({ ok: true, messages: originalMessageThread(ticket.raw) })
     if (cfg.thread.mode === 'inline') {
       const arr = Array.isArray(ticket.raw?.[cfg.thread.arrayField]) ? ticket.raw[cfg.thread.arrayField] : []
       return res.status(200).json({ ok: true, messages: sort(arr.map((m) => normalizeMessage(appId, m))) })

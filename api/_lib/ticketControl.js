@@ -190,6 +190,16 @@ export function ticketApps() {
   return Object.keys(APPS)
 }
 
+// For an app with `thread: null` (artiskids, sommel) the conversation is just
+// the customer's original message on the ticket itself. Returned in the same
+// normalized shape as normalizeMessage so the panel renders it like any thread.
+export function originalMessageThread(raw) {
+  const r = raw ?? {}
+  const body = r.body ?? r.message ?? r.description ?? null
+  if (!body) return []
+  return [{ staff: false, name: r.created_by_email ?? null, body: String(body), ts: r.created_date ?? r.created_at ?? null }]
+}
+
 export function ticketStatusesFor(appId) {
   return APPS[appId]?.statuses ?? []
 }

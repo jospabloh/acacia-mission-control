@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTicketReply, buildTicketStatus, normalizeMessage, ticketApps } from './ticketControl.js'
+import { buildTicketReply, buildTicketStatus, normalizeMessage, originalMessageThread, ticketApps } from './ticketControl.js'
 
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
@@ -182,4 +182,16 @@ test('normalizeMessage flags staff by each app author role', () => {
   assert.equal(normalizeMessage('liuma', { author_role: 'REQUESTER', body: 'a' }).staff, false)
   assert.equal(normalizeMessage('rumbo', { author_role: 'support', body: 'a' }).staff, true)
   assert.equal(normalizeMessage('rumbo', { author_role: 'requester', body: 'a' }).staff, false)
+})
+
+// ── apps without a thread: the original message is the conversation ─────────
+test('originalMessageThread devuelve el mensaje del cliente (sommel: body)', () => {
+  const out = originalMessageThread({ body: 'No imprime', created_by_email: 'a@b.mx', created_date: '2026-09-30T20:00:00Z' })
+  assert.deepEqual(out, [{ staff: false, name: 'a@b.mx', body: 'No imprime', ts: '2026-09-30T20:00:00Z' }])
+})
+
+test('originalMessageThread lee `message` (artiskids) y no inventa nada si no hay texto', () => {
+  assert.equal(originalMessageThread({ message: 'Hola' })[0].body, 'Hola')
+  assert.deepEqual(originalMessageThread({}), [])
+  assert.deepEqual(originalMessageThread(null), [])
 })
