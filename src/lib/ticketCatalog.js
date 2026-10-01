@@ -68,3 +68,25 @@ export function compareByUrgency(a, b, now = Date.now()) {
   const cb = Date.parse(b.customer_created_at || b.created_at) || 0
   return ca - cb
 }
+
+// How much of the resolve SLA a ticket has used, for the heat bar. The clock
+// runs from the customer's creation instant to sla_resolve_due_at (the same
+// anchor api/_lib/sla.js uses). `used` is 0..1, capped at 1 once overdue.
+// Null when there is no clock: closed ticket, or missing/unparseable times.
+export function slaProgress(row, now = Date.now()) {
+  if (!row || !isOpenTicket(row.status)) return null
+  const start = Date.parse(row.customer_created_at || row.created_at)
+  const due = dueMs(row)
+  if (Number.isNaN(start) || due === null || due <= start) return null
+  const used = Math.min(1, Math.max(0, (now - start) / (due - start)))
+  return { used, overdue: now > due, remainingMs: due - now }
+}
+
+// "3h 20m" for a duration in ms (sign ignored).
+export function fmtDuration(ms) {
+  const mins = Math.round(Math.abs(ms) / 60000)
+  const d = Math.floor(mins / 1440)
+  const h = Math.floor((mins % 1440) / 60)
+  if (d >= 1) return h ? `${d}d ${h}h` : `${d}d`
+  return h >= 1 ? `${h}h ${mins % 60}m` : `${mins}m`
+}

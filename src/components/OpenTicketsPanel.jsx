@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { SlaHeatBar } from './SlaHeatBar.jsx'
 import { supabase } from '../lib/supabase.js'
 import { TICKET_CATALOG, OPEN_TICKETS_FILTER, compareByUrgency, isOpenTicket, isOverdue } from '../lib/ticketCatalog.js'
 
@@ -70,6 +71,7 @@ export function OpenTicketsPanel() {
                   {r.ticket_number && <span className="mr-1.5 font-mono text-xs font-semibold text-brand">{r.ticket_number}</span>}
                   {r.subject || '(sin asunto)'}
                 </span>
+                <SlaHeatBar row={r} now={now} className="flex w-20 shrink-0 sm:w-28" />
                 {isOverdue(r, now) && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300">SLA vencido</span>}
                 <span className="hidden shrink-0 text-xs text-ink-faint sm:inline">{ago(r.customer_created_at || r.created_at)}</span>
               </Link>

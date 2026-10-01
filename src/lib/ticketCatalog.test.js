@@ -3,7 +3,7 @@
 // operators can read but not close, which is exactly how 6 of 11 apps ended up.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { TICKET_CATALOG, OPEN_TICKETS_FILTER, TERMINAL_STATUSES, compareByUrgency, isOpenTicket } from './ticketCatalog.js'
+import { TICKET_CATALOG, OPEN_TICKETS_FILTER, TERMINAL_STATUSES, compareByUrgency, fmtDuration, isOpenTicket, slaProgress } from './ticketCatalog.js'
 import { ticketApps, ticketStatusesFor, ticketControlFor } from '../../api/_lib/ticketControl.js'
 
 test('the panel knows every app the server syncs tickets for', () => {
@@ -58,4 +58,33 @@ test('urgency: the longest-overdue ticket comes first, not the newest', () => {
   ]
   const order = [...rows].sort((a, b) => compareByUrgency(a, b, now)).map((r) => r.id)
   assert.deepEqual(order, ['days-overdue', 'fresh-overdue', 'on-time-sooner', 'on-time', 'no-sla'])
+})
+
+test('slaProgress: the bar fills with the share of the resolve SLA already used', () => {
+  // 24 h SLA, 6 h in → a quarter used. The bar is about time against the
+  // promise, so it must start at the customer's creation, not when MC saw it.
+  const row = { status: 'abierto', customer_created_at: '2026-10-01T00:00:00Z', created_at: '2026-10-01T05:00:00Z', sla_resolve_due_at: '2026-10-02T00:00:00Z' }
+  const p = slaProgress(row, Date.parse('2026-10-01T06:00:00Z'))
+  assert.equal(p.used, 0.25)
+  assert.equal(p.overdue, false)
+})
+
+test('slaProgress: overdue caps at full and says so', () => {
+  const row = { status: 'open', created_at: '2026-10-01T00:00:00Z', sla_resolve_due_at: '2026-10-01T04:00:00Z' }
+  const p = slaProgress(row, Date.parse('2026-10-01T09:00:00Z'))
+  assert.equal(p.used, 1)
+  assert.equal(p.overdue, true)
+})
+
+test('slaProgress: no clock for closed tickets or missing times', () => {
+  const base = { created_at: '2026-10-01T00:00:00Z', sla_resolve_due_at: '2026-10-01T04:00:00Z' }
+  assert.equal(slaProgress({ ...base, status: 'cerrado' }), null)
+  assert.equal(slaProgress({ ...base, status: 'open', sla_resolve_due_at: null }), null)
+  assert.equal(slaProgress({ status: 'open', created_at: 'x', sla_resolve_due_at: base.sla_resolve_due_at }), null)
+})
+
+test('fmtDuration', () => {
+  assert.equal(fmtDuration(45 * 60000), '45m')
+  assert.equal(fmtDuration(-(3 * 60 + 20) * 60000), '3h 20m')
+  assert.equal(fmtDuration((26 * 60) * 60000), '1d 2h')
 })
