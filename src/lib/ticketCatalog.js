@@ -25,7 +25,8 @@ export const TICKET_APPS = Object.entries(TICKET_CATALOG).map(([id, c]) => ({ id
 // A ticket is open unless its status is terminal. Defined by what is DONE, not
 // by listing what is open, so a new app's opening state (ctrlhq's `submitted`)
 // counts as open without anyone having to add it here.
-const TERMINAL = new Set(['resolved', 'closed', 'cerrado', 'ai_resolved'])
+export const TERMINAL_STATUSES = ['resolved', 'closed', 'cerrado', 'ai_resolved']
+const TERMINAL = new Set(TERMINAL_STATUSES)
 
 export function isOpenTicket(status) {
   if (status == null || status === '') return true
@@ -34,4 +35,36 @@ export function isOpenTicket(status) {
 
 export function isTerminalStatus(status) {
   return !isOpenTicket(status)
+}
+
+// PostgREST filter for "open": a NULL status is open too, and `not.in` alone
+// would drop it (NULL NOT IN (...) is NULL). Applied in the query, BEFORE the
+// row limit, so old open tickets are never cut off by newer closed history.
+export const OPEN_TICKETS_FILTER = `status.is.null,status.not.in.(${TERMINAL_STATUSES.join(',')})`
+
+function dueMs(row) {
+  const t = Date.parse(row?.sla_resolve_due_at)
+  return Number.isNaN(t) ? null : t
+}
+
+export function isOverdue(row, now = Date.now()) {
+  const due = dueMs(row)
+  return due !== null && due < now
+}
+
+// Most urgent first: overdue before on time; within each group, the earliest
+// SLA deadline first (a ticket overdue for days outranks one overdue for
+// minutes); tickets without a deadline last; creation time only breaks ties.
+export function compareByUrgency(a, b, now = Date.now()) {
+  const late = Number(isOverdue(b, now)) - Number(isOverdue(a, now))
+  if (late) return late
+  const da = dueMs(a), db = dueMs(b)
+  if (da !== db) {
+    if (da === null) return 1
+    if (db === null) return -1
+    return da - db
+  }
+  const ca = Date.parse(a.customer_created_at || a.created_at) || 0
+  const cb = Date.parse(b.customer_created_at || b.created_at) || 0
+  return ca - cb
 }

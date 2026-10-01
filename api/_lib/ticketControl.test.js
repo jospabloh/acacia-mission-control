@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTicketReply, buildTicketStatus, newCustomerReplies, normalizeMessage, originalMessageThread, ticketApps } from './ticketControl.js'
+import { buildTicketReply, buildTicketStatus, ingestAlertKind, newCustomerReplies, normalizeMessage, originalMessageThread, ticketApps } from './ticketControl.js'
 
 const NOW = new Date('2026-06-26T12:00:00Z')
 const NOW_ISO = NOW.toISOString()
@@ -216,4 +216,24 @@ test('newCustomerReplies: solo lo que el bar escribió desde la última copia', 
   assert.equal(newCustomerReplies('sommel', null, next).length, 2)
   // Apps that did not opt in never alert on replies.
   assert.deepEqual(newCustomerReplies('rumbo', { responses: [] }, { responses: [{ author_role: 'requester', body: 'x' }] }), [])
+})
+
+// ── ingest: which alert a ping deserves ───────────────────────────────────────
+test('ingestAlertKind: a ticket MC has never seen gets the new-ticket alert', () => {
+  assert.equal(ingestAlertKind(null, 0), 'new')
+})
+
+test('ingestAlertKind: a sync-imported ticket (notified_at null) still quotes a customer reply', () => {
+  // Without this, the first reply on a ticket the daily sync brought in went
+  // out as a generic "new ticket" alert and the reply text never reached support.
+  assert.equal(ingestAlertKind({ notified_at: null, raw: {} }, 1), 'reply')
+})
+
+test('ingestAlertKind: a sync-imported ticket with no reply gets its one new-ticket alert', () => {
+  assert.equal(ingestAlertKind({ notified_at: null, raw: {} }, 0), 'new')
+})
+
+test('ingestAlertKind: an already-notified ticket alerts only on new customer replies', () => {
+  assert.equal(ingestAlertKind({ notified_at: NOW_ISO }, 0), 'none')
+  assert.equal(ingestAlertKind({ notified_at: NOW_ISO }, 2), 'reply')
 })
