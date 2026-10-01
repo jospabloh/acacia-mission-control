@@ -219,6 +219,21 @@ export function newCustomerReplies(appId, prevRaw, nextRaw) {
   return mine(nextRaw).slice(before)
 }
 
+// What an incoming ping should alert about. `existing` is the bodega row (null
+// when MC has never seen the ticket), `replyCount` what newCustomerReplies found
+// against its stored raw. Replies are checked whenever a row exists, NOT only
+// once notified: a ticket the daily sync imported has notified_at null, and its
+// first customer reply must still be quoted as a reply. notified_at only guards
+// the one-time new-ticket alert.
+//   'reply' → alert the new customer messages (and mark the ticket notified)
+//   'new'   → the one-time new-ticket alert
+//   'none'  → reflect-only (a retry or a status echo)
+export function ingestAlertKind(existing, replyCount) {
+  if (existing && replyCount > 0) return 'reply'
+  if (existing?.notified_at) return 'none'
+  return 'new'
+}
+
 export function ticketStatusesFor(appId) {
   return APPS[appId]?.statuses ?? []
 }

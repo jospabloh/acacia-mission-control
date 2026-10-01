@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { SlaHeatBar } from './SlaHeatBar.jsx'
 import { supabase } from '../lib/supabase.js'
-import { TICKET_CATALOG, isOpenTicket } from '../lib/ticketCatalog.js'
+import { TICKET_CATALOG, OPEN_TICKETS_FILTER, compareByUrgency, isOpenTicket, isOverdue } from '../lib/ticketCatalog.js'
 
 // Open support tickets across every app, on the dashboard. Reads the synced
 // bodega (RLS: any member can read), refreshes live like the Support page, and
@@ -18,17 +19,13 @@ function ago(v) {
   return `hace ${Math.round(h / 24)} días`
 }
 
-function overdue(row) {
-  const due = Date.parse(row.sla_resolve_due_at)
-  return !Number.isNaN(due) && due < Date.now()
-}
-
 export function OpenTicketsPanel() {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
 
   const load = useCallback(() => supabase.from('tickets')
     .select('id, app_id, ticket_number, subject, status, created_at, customer_created_at, sla_resolve_due_at, apps(name)')
+    .or(OPEN_TICKETS_FILTER)
     .order('created_at', { ascending: false })
     .limit(500)
     .then(({ data, error: e }) => {
@@ -47,9 +44,9 @@ export function OpenTicketsPanel() {
 
   if (rows === null) return null
 
-  const sorted = [...rows].sort((a, b) => (overdue(b) - overdue(a))
-    || (Date.parse(b.customer_created_at || b.created_at) - Date.parse(a.customer_created_at || a.created_at)))
-  const late = rows.filter(overdue).length
+  const now = Date.now()
+  const sorted = [...rows].sort((a, b) => compareByUrgency(a, b, now))
+  const late = rows.filter((r) => isOverdue(r, now)).length
 
   return (
     <section className="rounded-xl border border-hair bg-paper-card p-5">
@@ -74,7 +71,8 @@ export function OpenTicketsPanel() {
                   {r.ticket_number && <span className="mr-1.5 font-mono text-xs font-semibold text-brand">{r.ticket_number}</span>}
                   {r.subject || '(sin asunto)'}
                 </span>
-                {overdue(r) && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300">SLA vencido</span>}
+                <SlaHeatBar row={r} now={now} className="flex w-20 shrink-0 sm:w-28" />
+                {isOverdue(r, now) && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300">SLA vencido</span>}
                 <span className="hidden shrink-0 text-xs text-ink-faint sm:inline">{ago(r.customer_created_at || r.created_at)}</span>
               </Link>
             </li>

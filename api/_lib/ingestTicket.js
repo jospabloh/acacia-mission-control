@@ -19,7 +19,7 @@ import { callBridge, bridgeConfigured } from './appBridge.js'
 import { mapTicketRecord } from './sync/ticketMapping.js'
 import { normalizePriority } from './sla.js'
 import { renderTicketAlert, renderReplyAlert } from './ticketAlert.js'
-import { newCustomerReplies } from './ticketControl.js'
+import { ingestAlertKind, newCustomerReplies } from './ticketControl.js'
 
 // Who gets the internal new-ticket alert. Overridable via env; defaults to the
 // support desk + (temporarily) the owner's personal inbox.
@@ -80,23 +80,26 @@ export async function processIncomingTicket({ app, record }) {
   // Has this ticket already been notified? (idempotency across retries / repeat pings.)
   const { data: existing } = await supabaseAdmin
     .from('tickets').select('id, notified_at, raw').eq('app_id', appId).eq('external_id', ticket.external_id).maybeSingle()
-  const alreadyNotified = Boolean(existing?.notified_at)
+  const replies = existing ? newCustomerReplies(appId, existing.raw, record) : []
+  const kind = ingestAlertKind(existing, replies.length)
   const nowISO = new Date().toISOString()
 
   const row = {
     ...ticket,
     tenant_id: tenantId,
     source: 'push',
-    notified_at: alreadyNotified ? existing.notified_at : nowISO,
+    // A reply alert also counts as support having heard of the ticket, so a
+    // sync-imported ticket doesn't later get a stale "new ticket" alert too.
+    notified_at: existing?.notified_at ?? nowISO,
   }
   const { error: upErr } = await supabaseAdmin.from('tickets').upsert(row, { onConflict: 'app_id,external_id' })
   if (upErr) throw new Error(`tickets upsert: ${upErr.message}`)
 
-  // Already notified → reflect-only (a retry, or an update), unless the
-  // customer answered since the copy MC had: then support hears about it.
-  if (alreadyNotified) {
-    const replies = newCustomerReplies(appId, existing?.raw, record)
-    if (replies.length === 0) return { ok: true, ticket: ticket.external_id, notified: false, reason: 'ya notificado' }
+  // Already notified and nothing new from the customer → reflect-only.
+  if (kind === 'none') return { ok: true, ticket: ticket.external_id, notified: false, reason: 'ya notificado' }
+
+  // The customer answered since the copy MC had (pushed OR sync-imported).
+  if (kind === 'reply') {
     const email = await sendReplyAlerts(app, ticket, replies)
     await audit('ingest:ticket-reply', {
       target_app: appId, target_type: 'ticket', target_id: ticket.external_id,

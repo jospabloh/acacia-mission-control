@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { runSync, ticketThread, ticketAction } from '../lib/control.js'
 import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import { SlaHeatBar } from '../components/SlaHeatBar.jsx'
 import { TICKET_APPS, TICKET_CATALOG, isOpenTicket } from '../lib/ticketCatalog.js'
 
 // Status → tone, case-insensitive.
@@ -231,6 +232,7 @@ export function Support() {
                   {(() => { const b = slaBadge(r); return b ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}>{b.label}</span> : null })()}
                   <span className="ml-auto">{fmtWhen(r.last_activity_at || r.created_at)}</span>
                 </div>
+                <SlaHeatBar row={r} className="mt-2 flex w-full" />
               </button>
             ))}
           </div>
@@ -248,6 +250,7 @@ export function Support() {
                     <p className="mt-0.5 text-xs text-ink-faint">
                       {sel.apps?.name ?? sel.app_id} · {sel.tenants?.name ?? sel.requester?.email ?? sel.requester?.name ?? '—'}
                     </p>
+                    <SlaHeatBar row={sel} showLabel className="mt-2 flex w-56 max-w-full" />
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     {isOpen(sel.status) && TICKET_CATALOG[sel.app_id]?.closeStatus && (
