@@ -11,6 +11,16 @@ import { requireMember } from '../requireMember.js'
 import { ticketControlFor, normalizeMessage, buildTicketReply, buildTicketStatus, originalMessageThread } from '../ticketControl.js'
 import { syncTicketsForApp } from '../sync/syncTickets.js'
 
+// Audit row for a ticket write that did not go through. Pure, so it is tested.
+// The message is capped: a bridge error can carry a whole upstream body.
+export function failureAuditFields({ member, appId, ticketExternalId, op, status, code, error }) {
+  return {
+    actor: member?.user_id ?? null, actor_email: member?.email ?? null,
+    target_app: appId, target_id: String(ticketExternalId),
+    payload: { op, status: status ?? null, http: code, error: String(error ?? '').slice(0, 500) },
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
   if (!requireSupabase(res)) return
@@ -58,20 +68,26 @@ export default async function handler(req, res) {
   }
 
   // ── WRITE: reply | status ────────────────────────────────────────────────────
-  if (!bridgeConfigured()) return res.status(503).json({ error: 'INGEST_HMAC_SECRET no configurado' })
+  // A failed write is audited too, with its error: a reply that never reached
+  // the app otherwise leaves no trace at all (2026-10-02, Sommel QA ticket).
+  const failed = async (code, error) => {
+    await audit('control:ticket-action-failed', failureAuditFields({ member, appId, ticketExternalId, op, status, code, error }))
+    return res.status(code).json({ error })
+  }
+  if (!bridgeConfigured()) return failed(503, 'INGEST_HMAC_SECRET no configurado')
   let change
   if (op === 'reply') {
     change = buildTicketReply(appId, { ticketRaw: ticket.raw, body, actorEmail: member.email, actorName: 'ACACIA Soporte' })
   } else if (op === 'status') {
     change = buildTicketStatus(appId, { ticketRaw: ticket.raw, status })
   } else {
-    return res.status(400).json({ error: `op desconocida: ${op}` })
+    return failed(400, `op desconocida: ${op}`)
   }
-  if (change.error) return res.status(400).json({ error: change.error })
+  if (change.error) return failed(400, change.error)
 
   const { data: app, error } = await supabaseAdmin.from('apps').select('*').eq('id', appId).maybeSingle()
-  if (error) return res.status(500).json({ error: error.message })
-  if (!app) return res.status(404).json({ error: 'app no encontrada' })
+  if (error) return failed(500, error.message)
+  if (!app) return failed(404, 'app no encontrada')
 
   try {
     const { entity, id, patch, messageEntity, message, appendField, appendItem, currentArray } = change
@@ -84,6 +100,6 @@ export default async function handler(req, res) {
     })
     return res.status(200).json({ ok: true, op, resync })
   } catch (e) {
-    return res.status(502).json({ error: e.message })
+    return failed(502, e.message)
   }
 }
