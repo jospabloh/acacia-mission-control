@@ -162,16 +162,24 @@ export function ActionMenu({ items, label = 'Acciones', align = 'right' }) {
   // Hacia arriba cuando abajo no cabe: el menú del último renglón de una tabla
   // larga queda contra el borde de la ventana y se lee cortado.
   const [up, setUp] = useState(false)
+  // Alto máximo cuando el menú no cabe ni arriba ni abajo (celular horizontal,
+  // iPad con teclado): se acorta y hace scroll en vez de salirse de la pantalla.
+  const [maxH, setMaxH] = useState(null)
 
   useLayoutEffect(() => {
-    if (!open) { setUp(false); return }
+    if (!open) { setUp(false); setMaxH(null); return }
     // `offsetHeight`, no `getBoundingClientRect`: el menú entra con la
     // animación `pop`, que arranca en scale(0.985), y un rect medido a mitad de
     // ella miente sobre el alto real. El 4 es el `mt-1`/`mb-1` del hueco.
     const h = pop.current?.offsetHeight
     const btn = box.current?.getBoundingClientRect()
     if (!h || !btn) return
-    setUp(btn.bottom + 4 + h > window.innerHeight - 8 && btn.top > h + 8)
+    const below = window.innerHeight - 8 - (btn.bottom + 4)
+    const above = btn.top - 4 - 8
+    const goUp = h > below && above > below
+    setUp(goUp)
+    const room = goUp ? above : below
+    setMaxH(h > room ? Math.max(room, 120) : null)
   }, [open])
 
   useEffect(() => {
@@ -196,7 +204,7 @@ export function ActionMenu({ items, label = 'Acciones', align = 'right' }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>
       </button>
       {open && (
-        <div ref={pop} role="menu" className={`pop absolute z-40 w-60 overflow-hidden rounded-xl border border-hair bg-paper-card py-1 shadow-card ${align === 'right' ? 'right-0' : 'left-0'} ${up ? 'bottom-full mb-1' : 'mt-1'}`}>
+        <div ref={pop} role="menu" style={maxH ? { maxHeight: maxH } : undefined} className={`pop absolute z-40 w-60 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-hair bg-paper-card py-1 shadow-card ${align === 'right' ? 'right-0' : 'left-0'} ${up ? 'bottom-full mb-1' : 'mt-1'}`}>
           {usable.map((it, i) => it.separator ? (
             <div key={`sep-${i}`} className="my-1 border-t border-hair" />
           ) : (

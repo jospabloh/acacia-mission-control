@@ -223,14 +223,14 @@ export function Support() {
                   </span>
                   <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${tone(r.status)}`}>{r.status ?? '—'}</span>
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-ink-faint">
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
                   <span className="font-medium text-ink-mute">{r.apps?.name ?? r.app_id}</span>
                   <span>·</span>
-                  <span className="truncate">{r.tenants?.name ?? r.requester?.email ?? r.requester?.name ?? '—'}</span>
+                  <span className="min-w-0 max-w-full truncate">{r.tenants?.name ?? r.requester?.email ?? r.requester?.name ?? '—'}</span>
                   <span>·</span>
                   <span className={PRIO_TONE[String(r.priority ?? '').toLowerCase()] ?? 'text-ink-faint'}>{r.priority ?? '—'}</span>
                   {(() => { const b = slaBadge(r); return b ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}>{b.label}</span> : null })()}
-                  <span className="ml-auto">{fmtWhen(r.last_activity_at || r.created_at)}</span>
+                  <span className="ml-auto whitespace-nowrap">{fmtWhen(r.last_activity_at || r.created_at)}</span>
                 </div>
                 <SlaHeatBar row={r} className="mt-2 flex w-full" />
               </button>
@@ -243,8 +243,8 @@ export function Support() {
               <p className="text-sm text-ink-faint">Elige un ticket para ver la conversación.</p>
             ) : (
               <>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 basis-56">
                     {sel.ticket_number && <p className="font-mono text-xs font-semibold text-brand">{sel.ticket_number}</p>}
                     <h3 className="font-display text-base font-semibold text-ink">{sel.subject || '(sin asunto)'}</h3>
                     <p className="mt-0.5 text-xs text-ink-faint">
@@ -252,7 +252,7 @@ export function Support() {
                     </p>
                     <SlaHeatBar row={sel} showLabel className="mt-2 flex w-56 max-w-full" />
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {isOpen(sel.status) && TICKET_CATALOG[sel.app_id]?.closeStatus && (
                       <button onClick={() => changeStatus(TICKET_CATALOG[sel.app_id].closeStatus)} disabled={busy}
                         className="rounded-md border border-hair px-2.5 py-1 text-xs font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">
