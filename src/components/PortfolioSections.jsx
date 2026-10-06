@@ -11,14 +11,9 @@ const BACKEND_LABEL = { base44: 'Base44', supabase: 'Supabase', external: 'Exter
 // is the only escape hatch to the running app.
 function AppCard({ app, stat, sess }) {
   return (
-    <div className="group relative rounded-xl border border-hair bg-paper-card hover:border-brand/40 hover:shadow-card transition">
-      <a href={app.url} target="_blank" rel="noreferrer" title="Abrir la app"
-        onClick={(e) => e.stopPropagation()}
-        className="absolute right-4 top-4 z-10 text-ink-faint hover:text-brand">
-        <Icon name="external" size={14} />
-      </a>
-      <Link to={`/apps/${app.id}`} className="block p-5">
-        <div className="flex items-center gap-2 pr-6">
+    <div className="group flex items-stretch rounded-xl border border-hair bg-paper-card hover:border-brand/40 hover:shadow-card transition">
+      <Link to={`/apps/${app.id}`} className="block min-w-0 flex-1 p-5 pr-1">
+        <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${app.status === 'active' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
           <span className="font-display font-semibold text-ink">{app.name}</span>
         </div>
@@ -47,6 +42,10 @@ function AppCard({ app, stat, sess }) {
           Control y analíticas <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
         </div>
       </Link>
+      <a href={app.url} target="_blank" rel="noreferrer" title="Abrir la app" aria-label="Abrir la app"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-faint hover:text-brand">
+        <Icon name="external" size={14} />
+      </a>
     </div>
   )
 }

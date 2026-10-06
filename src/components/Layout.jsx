@@ -98,7 +98,7 @@ export function Layout() {
               producción
             </div>
           </header>
-          <main className="p-4 sm:p-6 lg:p-8 max-w-6xl">
+          <main className="p-4 pb-20 sm:p-6 sm:pb-20 lg:p-8 lg:pb-20 max-w-6xl">
             <Outlet />
           </main>
         </div>
