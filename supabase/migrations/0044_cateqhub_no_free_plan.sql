@@ -42,4 +42,4 @@ set config = jsonb_set(
   '{"plan": "sin_licencia", "status": "active"}'::jsonb,
   true
 )
-where slug = 'cateqhub';
+where id = 'cateqhub';
