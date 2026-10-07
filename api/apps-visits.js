@@ -15,6 +15,8 @@
 // (which anyone can already write to). No member gate, no PII — visitor is
 // never selected here.
 import { supabaseAdmin, requireSupabase } from './_lib/supabaseAdmin.js'
+import { aggregateVisits } from './_lib/visitsAggregate.js'
+import { pageAll } from './_lib/pageAll.js'
 
 // The 9 portfolio apps: a fixed, hand-maintained list, same reasoning as
 // before — a slug added on the site with nothing here just reads back as
@@ -52,49 +54,59 @@ export default async function handler(req, res) {
     } catch { return [] }
   })
 
-  const today = new Date()
-  const since30 = new Date(today.getTime() - 29 * 86_400_000).toISOString().slice(0, 10)
-  const since7 = new Date(today.getTime() - 6 * 86_400_000).toISOString().slice(0, 10)
+  const now = new Date()
+  // Window start comes from the same helper that buckets the rows, so the two
+  // can never disagree: it reaches back to the first day of the previous
+  // calendar month (up to ~62 days) instead of the former 30.
+  const { windowStart } = aggregateVisits({ rows: [], appSlugs: APP_SLUGS, freewareSlugs, now })
 
   const knownPaths = [
     ...APP_SLUGS.map((s) => `/apps/${s}`),
     ...freewareSlugs.map((s) => `/freeware/${s}`),
   ]
 
-  // Scoped to known paths and the last 30 days — unlike web-kpis.js (which
+  // Scoped to known paths and the window above — unlike web-kpis.js (which
   // scans the whole table for its own authenticated dashboard), a public
   // endpoint has no caller-side rate limit, so keep the query itself cheap
   // and narrow rather than relying on restraint from whoever calls it.
-  const { data, error } = await supabaseAdmin
-    .from('web_events')
-    .select('path, day')
-    .in('path', knownPaths)
-    .gte('day', since30)
-    .limit(50_000)
-  if (error) return res.status(500).json({ error: error.message })
-
-  const visits = {}
-  for (const slug of APP_SLUGS) visits[slug] = { visits30: 0, visits7: 0 }
-  const freeware = {}
-  for (const slug of freewareSlugs) freeware[slug] = { visits30: 0, visits7: 0 }
-
-  for (const row of data ?? []) {
-    let bucket, slug
-    if (row.path.startsWith('/apps/')) {
-      slug = row.path.slice('/apps/'.length)
-      bucket = visits[slug]
-    } else if (row.path.startsWith('/freeware/')) {
-      slug = row.path.slice('/freeware/'.length)
-      bucket = freeware[slug]
-    }
-    if (!bucket) continue // path matched the filter but isn't a known slug (shouldn't happen)
-    bucket.visits30++
-    if (row.day >= since7) bucket.visits7++
+  //
+  // Paging: the old single `.limit(50_000)` was silently capped by PostgREST's
+  // max-rows setting (1000 by default on Supabase) AND would silently truncate
+  // with a wider window. So read keyset pages on the primary key (`id`, stable
+  // under concurrent inserts, unlike offset paging) via pageAll(), which ends
+  // ONLY on an empty page (a short page can just be a lower server max-rows)
+  // and stops at 60 pages (60k rows at 1000/page), reporting `truncated: true`
+  // instead of quietly under-counting. Cost: one extra cheap query per
+  // uncached call, which the edge cache below absorbs.
+  let rows, truncated
+  try {
+    ;({ rows, truncated } = await pageAll(async (afterId) => {
+      const { data, error } = await supabaseAdmin
+        .from('web_events')
+        .select('id, path, day')
+        .in('path', knownPaths)
+        .gte('day', windowStart)
+        .gt('id', afterId)
+        .order('id', { ascending: true })
+        .limit(1000)
+      if (error) throw new Error(error.message)
+      return data
+    }))
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
   }
+
+  const { since30, month, visits, freeware, topApp, topFreeware } =
+    aggregateVisits({ rows, appSlugs: APP_SLUGS, freewareSlugs, now })
 
   // Cache at the edge — this backs a page's initial layout, not a live
   // dashboard, and a public unauthenticated endpoint is exactly the kind
-  // that should not re-run its query (now two queries) on every pageview.
+  // that should not re-run its query (now two queries, the second one paged
+  // over up to ~62 days) on every pageview. 120s is still right: the monthly
+  // ranking only changes at month boundaries and the 30/7-day counters are not
+  // live numbers.
   res.setHeader('Cache-Control', 'public, max-age=120, s-maxage=120, stale-while-revalidate=600')
-  return res.status(200).json({ ok: true, since: since30, visits, freeware })
+  const body = { ok: true, since: since30, visits, freeware, month, topApp, topFreeware }
+  if (truncated) body.truncated = true
+  return res.status(200).json(body)
 }
