@@ -118,3 +118,8 @@ export function appSessions(appId) {
 export function revokeSessions(appId, { scope = 'session', ids, userEmail, override } = {}) {
   return postControl('/api/control/session-revoke', { appId, scope, ids, userEmail, override })
 }
+
+// WRITE: revisión de un testimonio (approve | reject | unpublish). Admin+.
+export function testimonialReview(id, op, updatedAt) {
+  return postControl('/api/control/testimonial-review', { id, op, updatedAt })
+}

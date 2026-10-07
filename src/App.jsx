@@ -13,6 +13,7 @@ import { Revenue } from './pages/Revenue.jsx'
 import { CRM } from './pages/CRM.jsx'
 import { Analytics } from './pages/Analytics.jsx'
 import { Support } from './pages/Support.jsx'
+import { Testimonials } from './pages/Testimonials.jsx'
 import { Announcements } from './pages/Announcements.jsx'
 import { Health } from './pages/Health.jsx'
 import { WriteControl } from './pages/WriteControl.jsx'
@@ -36,6 +37,7 @@ export default function App() {
                 <Route path="crm" element={<CRM />} />
                 <Route path="analytics" element={<Analytics />} />
                 <Route path="support" element={<Support />} />
+                <Route path="testimonials" element={<Testimonials />} />
                 <Route path="announcements" element={<Announcements />} />
                 <Route path="health" element={<Health />} />
                 <Route path="write-control" element={<WriteControl />} />

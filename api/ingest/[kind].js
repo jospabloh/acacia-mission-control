@@ -7,12 +7,14 @@ import lead from '../_lib/ingest/lead.js'
 import ticket from '../_lib/ingest/ticket.js'
 import ticketPull from '../_lib/ingest/ticket-pull.js'
 import tenantPull from '../_lib/ingest/tenant-pull.js'
+import testimonialPull from '../_lib/ingest/testimonial-pull.js'
 
 const ROUTES = {
   'lead': lead,
   'ticket': ticket,
   'ticket-pull': ticketPull,
   'tenant-pull': tenantPull,
+  'testimonial-pull': testimonialPull,
 }
 
 export default async function handler(req, res) {
