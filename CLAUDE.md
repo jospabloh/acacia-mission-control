@@ -454,3 +454,32 @@ si lo fuera.
 que rotar el secreto del puente habría recontado en silencio cada visitante
 único. Ahora usa `TRACK_SALT`. Un secreto de autenticación autentica; cualquier
 otra cosa que necesite una cadena aleatoria estable se trae la suya.
+
+## Licencias: de quién es y correo de seguimiento por renglón; el aviso de alta guarda su resultado (2026-09-30)
+
+- **Dueño visible.** El renglón de `Licenses.jsx` muestra `ownerOf(r)` junto a la app
+  (`raw.owner_email` → `contact_email` → `admin_email` → `created_by`, el primero que
+  exista) y la búsqueda lo incluye. Cada app guarda al dueño en un campo distinto; si una
+  app nueva usa otro, se añade ahí. StockFlow sólo trae `created_by`.
+- **"Enviar correo de seguimiento…"** (menú del renglón): renovación, aviso informativo o
+  invitación a activar el plan. Lee los administradores **de esa licencia** con
+  `listContacts` (contactos cuyo `id` es el `external_id` de la licencia) y envía con el
+  `send-message` de siempre. La acción se muestra para todas las apps: una sin
+  `messagingFor` responde 400 y el toast lo explica (no hay copia cliente del catálogo de
+  mensajería, a propósito, para no crear otro espejo que se desincronice).
+- **`alerts.detail.email` registra qué pasó con el correo del aviso de alta**
+  (`{sent, failed, bridge}`). Antes la fila sólo probaba que MC *intentó* avisar.
+
+**Lo que ese registro sacó a la luz de inmediato:**
+- **ArtisKids no implementaba `emails.sendFollowup`**, y MC lo llama para el aviso de alta
+  de *cualquier* app: tres altas (2026-10-02/03) fallaron con `unknown action` y nunca
+  llegaron al dueño. Se implementó en su `acaciaControl` (jospabloh/artiskids). Una app
+  nueva debe tener esa acción antes de registrarse (Módulo 17).
+- **Límite por hora de `Core.SendEmail` por destinatario:** una alta de StockFlow
+  (2026-09-30) mandó a `h.josepablo@gmail.com` pero a `soporte@acaciaco.com.mx` respondió
+  "hit their hourly limit". Con varias altas seguidas, el segundo destinatario se pierde.
+  Sin arreglar: el registro lo hace visible, no lo evita.
+
+**Cómo se supo que el aviso de alta ya funcionaba:** en `alerts`, las altas de StockFlow
+del 30-sep y 1-oct aparecen con `via: ping` y el correo enviado; la de Cesar (29-sep)
+llegó con `via: sync` y sin registro de correo — el ping se había perdido.
