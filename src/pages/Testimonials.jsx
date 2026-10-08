@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { testimonialReview } from '../lib/control.js'
 import { useToasts } from '../lib/useToasts.js'
@@ -32,17 +32,22 @@ export function Testimonials() {
   const [more, setMore] = useState(false)
   const [tab, setTab] = useState('pending')
   const [busyId, setBusyId] = useState(null)
+  // Only the latest request may write state: switching tabs mid-load, or a
+  // reload after a review, must not let an older response resolve last and win.
+  const reqId = useRef(0)
 
   // One query per tab (status filter in the DB, never a client-side filter over
   // a capped result), paged with "Cargar más"; counts come from head queries, so
   // they stay right past the API's row cap. Order is deterministic (newest
   // first, id tiebreak) so pages never skip or repeat.
   const load = useCallback(async (status, upTo = PAGE) => {
+    const mine = ++reqId.current
     const [list, ...cs] = await Promise.all([
       supabase.from('testimonials').select(COLS).eq('status', status)
         .order('submitted_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).range(0, upTo - 1),
       ...TABS.map((t) => supabase.from('testimonials').select('id', { count: 'exact', head: true }).eq('status', t.value)),
     ])
+    if (mine !== reqId.current) return
     if (list.error || cs.some((c) => c.error)) { console.error((list.error ?? cs.find((c) => c.error).error).message); fail('No se pudieron cargar los testimonios.') }
     setRows(list.data ?? [])
     setMore((list.data?.length ?? 0) === upTo)
@@ -51,9 +56,11 @@ export function Testimonials() {
   useEffect(() => { setRows(null); load(tab) }, [load, tab])
 
   async function loadMore() {
+    const mine = reqId.current
     const from = rows.length
     const { data, error } = await supabase.from('testimonials').select(COLS).eq('status', tab)
       .order('submitted_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).range(from, from + PAGE - 1)
+    if (mine !== reqId.current) return // another load started meanwhile; its result wins
     if (error) { console.error(error.message); fail('No se pudieron cargar más testimonios.'); return }
     setRows((r) => [...r, ...(data ?? [])])
     setMore((data?.length ?? 0) === PAGE)

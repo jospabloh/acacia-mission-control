@@ -5,7 +5,7 @@
 import { supabaseAdmin, audit } from './supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from './appBridge.js'
 import { alertRecipients } from './ingestTicket.js'
-import { normalizeRecord, decideUpsert, decideGone, notifyCutoff, withdrawnPatch } from './testimonials.js'
+import { fetchAllPages, normalizeRecord, decideUpsert, decideGone, notifyCutoff, withdrawnPatch } from './testimonials.js'
 import { renderTestimonialAlert } from './testimonialAlert.js'
 
 // Best-effort, like the new-ticket alert: never throws.
@@ -13,7 +13,7 @@ async function notifyReviewers(app, row) {
   const email = { sent: [], failed: [] }
   const link = process.env.MC_PUBLIC_URL ? `${process.env.MC_PUBLIC_URL.replace(/\/$/, '')}/testimonials` : null
   const alert = renderTestimonialAlert({
-    appName: app.name || app.id, tenantName: row.tenant_name, rating: row.rating, link,
+    appName: app.name || app.id, rating: row.rating, link,
   })
   if (bridgeConfigured()) {
     for (const to of alertRecipients()) {
@@ -82,8 +82,10 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
     let writtenAt = null // updated_at of the row as WE wrote it (the notification claim needs it)
     let error
     let lost = false
-    if (d.erase) {
-      const r = await supabaseAdmin.from('testimonials').update(withdrawnPatch(d.sourceUpdatedAt, observedAt))
+    if (d.erase || d.touch) {
+      // Erase, or a touch (observed_at only; a withdrawn row keeps its erase patch).
+      const patch = d.erase ? withdrawnPatch(d.sourceUpdatedAt, observedAt) : { observed_at: observedAt }
+      const r = await supabaseAdmin.from('testimonials').update(patch)
         .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id, updated_at')
       error = r.error
       lost = !error && (r.data?.length ?? 0) === 0
@@ -153,8 +155,13 @@ export async function processMissingTestimonial({ app, externalId, observedAt = 
   return lostRace(externalId)
 }
 
+// EVERY stored row of the app (PostgREST caps one response at 1000): absence
+// detection over a subset would leave deleted rows outside it public forever.
 export async function listStoredTestimonials(appId) {
-  const { data, error } = await supabaseAdmin.from('testimonials').select('external_id, status').eq('app_id', appId)
-  if (error) throw new Error(`testimonials list: ${error.message}`)
-  return data ?? []
+  return fetchAllPages(async (from, to) => {
+    const { data, error } = await supabaseAdmin.from('testimonials').select('external_id, status')
+      .eq('app_id', appId).order('id', { ascending: true }).range(from, to)
+    if (error) throw new Error(`testimonials list: ${error.message}`)
+    return data ?? []
+  })
 }

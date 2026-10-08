@@ -1,6 +1,7 @@
 // Internal "nuevo testimonio por revisar" e-mail, same audience and shape as the
 // new-ticket alert (ticketAlert.js). ctx: { appName, tenantName, rating,
-// link }. NON-PERSONAL on purpose: no name, role or text. The reviewer reads those
+// link }. NON-PERSONAL on purpose: no name, role, text or business name (a
+// business name can identify a natural person). The reviewer reads those
 // in Mission Control (login, erased on withdrawal); a mail copy would outlive a
 // withdrawal in mailboxes and provider logs.
 function esc(s) {
@@ -14,7 +15,6 @@ export function renderTestimonialAlert(ctx) {
   <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8a8780">ACACIA Mission Control · ${esc(ctx.appName)}</p>
   <p style="margin:0 0 10px;font-size:16px;font-weight:600;color:#0e0d14">Nuevo testimonio por revisar</p>
   <p style="margin:0 0 10px;font-size:20px;color:#d97706;letter-spacing:2px">${stars}</p>
-  <p style="margin:12px 0 0;font-size:13px;color:#8a8780">${ctx.tenantName ? esc(ctx.tenantName) : 'Sin nombre de negocio'}</p>
   ${ctx.link ? `<p style="margin:18px 0 0"><a href="${esc(ctx.link)}" style="color:#3b6ef8;font-weight:600">Revisar en Mission Control</a></p>` : ''}
 </div>`
   return { subject, html }

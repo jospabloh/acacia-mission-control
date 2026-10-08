@@ -1,4 +1,4 @@
-// Pure rules for the testimonials feature (contract v1.4, Module 29 of
+// Pure rules for the testimonials feature (contract v1.5, Module 29 of
 // acacia-app-standard). No imports, so `node --test` loads it without
 // Supabase or the bridge.
 
@@ -79,7 +79,7 @@ export const contentChanged = (a, b) => CONTENT.some((k) => (a[k] ?? null) !== (
 // What "withdrawn" does to a bodega row: personal data is erased (Module 28),
 // rating and tenant stay. Used for withdrawn, invalid, no-consent AND deleted.
 export const WITHDRAWN_FIELDS = Object.freeze({
-  status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false,
+  status: 'withdrawn', body: '', author_name: '', author_role: null, tenant_name: null, consent_publish: false,
 })
 // The write for a withdrawal: the erase, plus `observed_at` (when the observation
 // that caused it started) and the source version if the record carried one (a
@@ -120,11 +120,21 @@ export function decideUpsert(existing, incoming, observedAt = null) {
   }
 
   if (!existing) return { action: 'insert', status: 'pending', notify: true, reason: 'nuevo' }
-  // Secondary guard: a record not newer than what we stored (older, or equal
-  // after an erase that kept the version) is a stale read that overlapped.
-  if (have !== null && seen <= have) return { action: 'skip', notify: false, reason: 'versión anterior o igual a la guardada' }
-  if (existing.status === 'withdrawn') return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
-  if (!contentChanged(existing, incoming)) return { action: 'skip', notify: false, reason: 'sin cambios' }
+  // A successful observation that changes nothing still ADVANCES observed_at
+  // (`touch`): otherwise an earlier-started record:null / absence that completes
+  // afterwards would still see the old marker and erase a row we just saw alive.
+  const touch = (reason) => (observedAt
+    ? { action: 'update', status: existing.status, touch: true, notify: false, reason }
+    : { action: 'skip', notify: false, reason })
+  if (existing.status === 'withdrawn') {
+    // Secondary guard: only a provably OLDER version is a stale read. An EQUAL
+    // version after an MC-side erase (record:null / absence keep the version) is
+    // a newer observation showing the record still exists, so it is restored.
+    if (have !== null && seen < have) return touch('versión anterior a la guardada')
+    return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
+  }
+  if (have !== null && seen <= have) return touch('versión anterior o igual a la guardada')
+  if (!contentChanged(existing, incoming)) return touch('sin cambios')
   if (existing.status === 'approved' || existing.status === 'rejected') {
     return { action: 'update', status: 'pending', notify: true, reason: 'contenido cambiado' }
   }

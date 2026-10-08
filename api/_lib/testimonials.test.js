@@ -114,7 +114,8 @@ test('upsert: stale WITHDRAWN snapshot after a newer resubmission → skip (no e
 test('upsert: stale pre-withdrawal record after withdrawal → skip, row stays erased', () => {
   const w = stored('withdrawn', { ...erased, source_updated_at: V2 })
   assert.equal(decideUpsert(w, inc({ updated_date: V1 })).action, 'skip')
-  assert.equal(decideUpsert(w, inc({ updated_date: V2 })).action, 'skip')
+  // equal version: only an MC-side erase (record:null/absence) keeps the version, so it is a newer sighting, not a stale read
+  assert.equal(decideUpsert(w, inc({ updated_date: V2 })).action, 'update')
 })
 test('upsert: genuinely new submission after the withdrawal → pending with the new content', () => {
   const w = stored('withdrawn', { ...erased, source_updated_at: V2 })
@@ -159,11 +160,11 @@ test('an already-withdrawn row is only touched by a newer observation (observed_
 test('withdrawnPatch stamps observed_at', () => {
   assert.deepEqual(withdrawnPatch(null, T2), { ...WITHDRAWN_FIELDS, observed_at: T2 })
 })
-test('alert e-mail is non-personal: no name, role or text', async () => {
+test('alert e-mail is non-personal: no name, role, text or business name', async () => {
   const { renderTestimonialAlert } = await import('./testimonialAlert.js')
   const a = renderTestimonialAlert({ appName: 'Rumbo', tenantName: 'Café Ana', rating: 5, body: 'TEXTO-SECRETO', authorName: 'NOMBRE-SECRETO', authorRole: 'ROL-SECRETO', link: 'https://x.mx/testimonials' })
   for (const t of ['TEXTO-SECRETO', 'NOMBRE-SECRETO', 'ROL-SECRETO']) assert.ok(!a.html.includes(t) && !a.subject.includes(t), t)
-  assert.ok(a.html.includes('Café Ana'))
+  assert.ok(!a.html.includes('Café Ana') && !a.subject.includes('Café Ana'), 'no business name either')
 })
 test('fetchAllPages reads past the 1000-row cap and stops on a short page', async () => {
   const calls = []
@@ -211,7 +212,7 @@ test('upsert: not publishable with a live row → withdrawn AND erase; with with
   assert.equal(decideUpsert(stored('withdrawn'), inc({ status: 'withdrawn' })).action, 'skip')
 })
 test('erase fields wipe the personal text and consent, nothing else', () => {
-  assert.deepEqual({ ...WITHDRAWN_FIELDS }, { status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false })
+  assert.deepEqual({ ...WITHDRAWN_FIELDS }, { status: 'withdrawn', body: '', author_name: '', author_role: null, tenant_name: null, consent_publish: false })
   assert.ok(Object.isFrozen(WITHDRAWN_FIELDS))
 })
 
@@ -444,4 +445,31 @@ test('sync stamps every upsert and every absence with the SAME observed_at (the 
   })
   assert.equal(seen.length, 2)
   assert.ok(seen[0] && seen[0] === seen[1])
+})
+
+test('MC2 race: a later no-op observation touches observed_at, so an earlier-started record:null cannot erase the live row', () => {
+  const live = stored('approved', { source_updated_at: V1, observed_at: T1 })
+  // list started at T3 returns the same record (equal version, unchanged content)
+  const noop = decideUpsert(live, inc({ updated_date: V1 }), T3)
+  assert.deepEqual([noop.action, noop.touch, noop.erase], ['update', true, undefined])
+  // newer version, unchanged content: also a touch
+  assert.equal(decideUpsert(live, inc({ updated_date: V2 }), T3).touch, true)
+  // the touch is applied; now the record:null that STARTED at T2 (< T3) arrives late
+  const after = { ...live, observed_at: T3 }
+  assert.equal(decideGone(after, undefined, { observedAt: T2 }).action, 'skip')
+  // without observation info the pure rule still skips (nothing to advance)
+  assert.equal(decideUpsert(live, inc({ updated_date: V1 })).action, 'skip')
+})
+test('MC2: an erased row is restored by a LATER observation with an EQUAL version (record still exists)', () => {
+  const erasedRow = stored('withdrawn', { ...erased, source_updated_at: V1, observed_at: T2 })
+  const d = decideUpsert(erasedRow, inc({ updated_date: V1 }), T3)
+  assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
+  // an OLDER observation or an older VERSION still cannot
+  assert.equal(decideUpsert(erasedRow, inc({ updated_date: V1 }), T1).action, 'skip')
+  const stale = decideUpsert({ ...erasedRow, source_updated_at: V2 }, inc({ updated_date: V1 }), T3)
+  assert.deepEqual([stale.action, stale.touch, stale.status], ['update', true, 'withdrawn'])
+})
+test('withdrawal clears tenant_name too (a business name can identify a person)', () => {
+  assert.equal(WITHDRAWN_FIELDS.tenant_name, null)
+  assert.equal(withdrawnPatch(V1, T1).tenant_name, null)
 })
