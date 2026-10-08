@@ -49,9 +49,9 @@ export async function runPing(body, deps = {}) {
     }
     const res = out?.data ?? out
     if (res?.ok !== true || res.record === undefined) return done('respuesta del puente inválida')
-    if (res.record === null) return done(`ausente en la app: ${(await d.processMissing({ app, externalId: testimonialId, snapshotStartedAt: startedAt })).reason}`)
+    if (res.record === null) return done(`ausente en la app: ${(await d.processMissing({ app, externalId: testimonialId, observedAt: startedAt })).reason}`)
 
-    const r = await d.processIncoming({ app, record: res.record, tenantName: res.tenant_name ?? null })
+    const r = await d.processIncoming({ app, record: res.record, tenantName: res.tenant_name ?? null, observedAt: startedAt })
     return done(`${r.reason}${r.notified ? ' (avisado)' : ''}`)
   } catch (e) {
     return done(`error: ${e.message}`)

@@ -1,4 +1,4 @@
-// Pure rules for the testimonials feature (contract v1.3, Module 29 of
+// Pure rules for the testimonials feature (contract v1.4, Module 29 of
 // acacia-app-standard). No imports, so `node --test` loads it without
 // Supabase or the bridge.
 
@@ -81,34 +81,47 @@ export const contentChanged = (a, b) => CONTENT.some((k) => (a[k] ?? null) !== (
 export const WITHDRAWN_FIELDS = Object.freeze({
   status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false,
 })
-// The write for a withdrawal: the erase, plus the source version it was decided
-// on (when there is one: a record deleted in the app has none, and the stored
-// version stays).
-export const withdrawnPatch = (sourceUpdatedAt = null) =>
-  ({ ...WITHDRAWN_FIELDS, ...(sourceUpdatedAt ? { source_updated_at: sourceUpdatedAt } : {}) })
+// The write for a withdrawal: the erase, plus `observed_at` (when the observation
+// that caused it started) and the source version if the record carried one (a
+// record deleted in the app has none, and the stored version stays).
+export const withdrawnPatch = (sourceUpdatedAt = null, observedAt = null) =>
+  ({ ...WITHDRAWN_FIELDS, ...(sourceUpdatedAt ? { source_updated_at: sourceUpdatedAt } : {}), ...(observedAt ? { observed_at: observedAt } : {}) })
 
-// Source versions: the app record's `updated_date`, stored as
-// `source_updated_at`. Compared as instants; null/invalid = unknown.
+// Ordering. PRIMARY rule: every row records `observed_at`, the MC-local instant
+// at which the bridge call that produced the observation STARTED (list call for
+// the sync, get call for a ping), and an observation is applied only if its
+// observed_at is strictly later than the row's. Both sides are MC's clock, so
+// nothing compares the app's clock with ours. SECONDARY guard: the app's own
+// `updated_date`, stored as `source_updated_at`, rejects only a record that is
+// provably not newer than what MC last stored (two calls can overlap, so a
+// later-starting call may still have read older data). Neither ever rejects a
+// record newer on both counts.
 const ms = (v) => { const t = Date.parse(v ?? ''); return Number.isNaN(t) ? null : t }
+const staleObservation = (existing, observedAt) => {
+  const have = ms(existing?.observed_at)
+  const at = ms(observedAt)
+  return have !== null && at !== null && at <= have
+}
 
 // Upsert decision table (contract §4). `existing` = bodega row or null.
 // Returns { action: 'skip'|'insert'|'update', status?, notify, reason }.
 // `notify` = a reviewer has something NEW to look at.
-export function decideUpsert(existing, incoming) {
+export function decideUpsert(existing, incoming, observedAt = null) {
   if (!incoming.external_id) return { action: 'skip', notify: false, reason: 'sin id' }
+  if (staleObservation(existing, observedAt)) return { action: 'skip', notify: false, reason: 'observación anterior a la guardada' }
   const have = ms(existing?.source_updated_at)
   const seen = ms(incoming.source_updated_at)
 
   if (!incoming.publishable) {
-    // An older snapshot never erases a newer resubmission. A withdrawn record
-    // with no readable version still erases: removing personal data is the safe side.
+    // A withdrawn record with no readable version still erases: removing
+    // personal data is the safe side.
     if (have !== null && seen !== null && seen < have) return { action: 'skip', notify: false, reason: 'versión anterior a la guardada' }
-    return { ...decideGone(existing, 'retirado o no publicable'), sourceUpdatedAt: incoming.source_updated_at }
+    return { ...decideGone(existing, 'retirado o no publicable', { observedAt }), sourceUpdatedAt: incoming.source_updated_at }
   }
 
   if (!existing) return { action: 'insert', status: 'pending', notify: true, reason: 'nuevo' }
-  // Freshness applies before EVERY transition (including restoring a withdrawn
-  // row): a stale list or a delayed ping carries an older or equal version.
+  // Secondary guard: a record not newer than what we stored (older, or equal
+  // after an erase that kept the version) is a stale read that overlapped.
   if (have !== null && seen <= have) return { action: 'skip', notify: false, reason: 'versión anterior o igual a la guardada' }
   if (existing.status === 'withdrawn') return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
   if (!contentChanged(existing, incoming)) return { action: 'skip', notify: false, reason: 'sin cambios' }
@@ -118,16 +131,16 @@ export function decideUpsert(existing, incoming) {
   return { action: 'update', status: 'pending', notify: false, reason: 'pendiente actualizado' }
 }
 
-// Withdrawn / invalid / deleted-in-the-app: erase if there is a live row.
-// `snapshotStartedAt`: when the list/get that revealed the absence STARTED. A
-// row whose source version is newer than that arrived after the snapshot, so
-// the snapshot cannot speak for it.
-export function decideGone(existing, reason = 'ya no existe en la app', { snapshotStartedAt = null } = {}) {
+// Withdrawn / invalid / deleted-in-the-app: erase if there is a live row. A row
+// that is already withdrawn is only "touched" (`touch: true`: observed_at moves
+// forward, nothing else changes), so a delayed older snapshot cannot restore it.
+export function decideGone(existing, reason = 'ya no existe en la app', { observedAt = null } = {}) {
   if (!existing) return { action: 'skip', notify: false, reason: 'sin fila' }
-  if (existing.status === 'withdrawn') return { action: 'skip', notify: false, reason: 'ya retirado' }
-  const have = ms(existing.source_updated_at)
-  const at = ms(snapshotStartedAt)
-  if (have !== null && at !== null && have > at) return { action: 'skip', notify: false, reason: 'más nueva que la lectura' }
+  if (staleObservation(existing, observedAt)) return { action: 'skip', notify: false, reason: 'observación anterior a la guardada' }
+  if (existing.status === 'withdrawn') {
+    return observedAt ? { action: 'update', status: 'withdrawn', erase: true, touch: true, notify: false, reason: 'ya retirado' }
+      : { action: 'skip', notify: false, reason: 'ya retirado' }
+  }
   return { action: 'update', status: 'withdrawn', erase: true, notify: false, reason }
 }
 

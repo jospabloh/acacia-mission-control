@@ -13,8 +13,7 @@ async function notifyReviewers(app, row) {
   const email = { sent: [], failed: [] }
   const link = process.env.MC_PUBLIC_URL ? `${process.env.MC_PUBLIC_URL.replace(/\/$/, '')}/testimonials` : null
   const alert = renderTestimonialAlert({
-    appName: app.name || app.id, tenantName: row.tenant_name, rating: row.rating, body: row.body,
-    authorName: row.author_name, authorRole: row.author_role, link,
+    appName: app.name || app.id, tenantName: row.tenant_name, rating: row.rating, link,
   })
   if (bridgeConfigured()) {
     for (const to of alertRecipients()) {
@@ -31,7 +30,9 @@ async function notifyReviewers(app, row) {
   try {
     await supabaseAdmin.from('alerts').insert({
       app_id: app.id, severity: 'info', kind: 'testimonial',
-      title: `Testimonio por revisar ${app.name || app.id} (${row.rating}/5): ${row.author_name}`.slice(0, 200),
+      // NON-PERSONAL: withdrawal scrubs `testimonials` only, so nothing that names
+      // or quotes the person may be copied into `alerts`.
+      title: `Testimonio por revisar ${app.name || app.id} (${row.rating}/5)`.slice(0, 200),
       detail: { testimonial_external_id: row.external_id, rating: row.rating, email_sent: email.sent.length, email_failed: email.failed.length },
     })
   } catch { /* alerts insert best-effort */ }
@@ -40,12 +41,17 @@ async function notifyReviewers(app, row) {
 
 // At most ONE alert per testimonial per hour, and a ping racing the sync can't
 // double it: the claim is a single conditional UPDATE, so only one caller sees a
-// row come back. Returns true when this caller owns the notification.
-async function claimNotification(id) {
+// row come back. It also requires the row to be STILL the pending version this
+// caller wrote (`updated_at` as returned by that write): a withdrawal or newer
+// write in between makes the claim fail and nothing is sent. Returns true when
+// this caller owns the notification.
+async function claimNotification(id, writtenUpdatedAt) {
+  if (!writtenUpdatedAt) return false
   const now = new Date().toISOString()
   const { data, error } = await supabaseAdmin
     .from('testimonials').update({ notified_at: now })
-    .eq('id', id).or(`notified_at.is.null,notified_at.lt.${notifyCutoff()}`).select('id')
+    .eq('id', id).eq('status', 'pending').eq('updated_at', writtenUpdatedAt)
+    .or(`notified_at.is.null,notified_at.lt.${notifyCutoff()}`).select('id')
   return !error && (data?.length ?? 0) > 0
 }
 
@@ -61,23 +67,24 @@ const lostRace = (id, reason = 'conflicto de escritura, se reintenta en el próx
 // record: the app's Testimonial entity; tenantName: from the bridge answer.
 // Returns { ok, testimonial, stored, status?, notified, reason }. Throws only on
 // a hard DB error.
-export async function processIncomingTestimonial({ app, record, tenantName = null }) {
+export async function processIncomingTestimonial({ app, record, tenantName = null, observedAt = new Date().toISOString() }) {
   const incoming = normalizeRecord(record, tenantName)
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const { data: existing, error: selErr } = await supabaseAdmin
       .from('testimonials').select('*').eq('app_id', app.id).eq('external_id', incoming.external_id).maybeSingle()
     if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
 
-    const d = decideUpsert(existing ?? null, incoming)
+    const d = decideUpsert(existing ?? null, incoming, observedAt)
     const skipped = { ok: true, testimonial: incoming.external_id, stored: false, notified: false, reason: d.reason }
     if (d.action === 'skip') return skipped
 
     let rowId = existing?.id
+    let writtenAt = null // updated_at of the row as WE wrote it (the notification claim needs it)
     let error
     let lost = false
     if (d.erase) {
-      const r = await supabaseAdmin.from('testimonials').update(withdrawnPatch(d.sourceUpdatedAt))
-        .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id')
+      const r = await supabaseAdmin.from('testimonials').update(withdrawnPatch(d.sourceUpdatedAt, observedAt))
+        .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id, updated_at')
       error = r.error
       lost = !error && (r.data?.length ?? 0) === 0
     } else {
@@ -85,27 +92,30 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
         tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
         rating: incoming.rating, body: incoming.body, author_name: incoming.author_name, author_role: incoming.author_role,
         consent_publish: true, consent_at: incoming.consent_at, submitted_at: incoming.submitted_at,
-        source_updated_at: incoming.source_updated_at,
+        source_updated_at: incoming.source_updated_at, observed_at: observedAt,
         status: 'pending', reviewed_by: null, reviewed_at: null,
       }
       if (d.action === 'insert') {
-        const r = await supabaseAdmin.from('testimonials').insert({ app_id: app.id, external_id: incoming.external_id, ...fields }).select('id').maybeSingle()
+        const r = await supabaseAdmin.from('testimonials').insert({ app_id: app.id, external_id: incoming.external_id, ...fields }).select('id, updated_at').maybeSingle()
         error = r.error
         rowId = r.data?.id
+        writtenAt = r.data?.updated_at
         if (error?.code === '23505') { error = null; lost = true } // the other writer got there first
       } else {
         const r = await supabaseAdmin.from('testimonials').update(fields)
-          .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id')
+          .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id, updated_at')
         error = r.error
         lost = !error && (r.data?.length ?? 0) === 0
+        writtenAt = r.data?.[0]?.updated_at
       }
     }
     if (error) throw new Error(`testimonials ${d.action}: ${error.message}`)
     if (lost) continue // re-read and re-decide against what the winner wrote
+    if (d.touch) return skipped // only observed_at moved; nothing to audit or report
 
     let email = null
     let notified = false
-    if (d.notify && rowId && await claimNotification(rowId)) {
+    if (d.notify && rowId && await claimNotification(rowId, writtenAt)) {
       notified = true
       email = await notifyReviewers(app, { ...incoming, status: d.status })
     }
@@ -119,20 +129,21 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
 }
 
 // The id no longer exists in the app (get → record:null, or absent from a list
-// that answered fine): same treatment as a withdrawal, but only for a row that
-// is not newer than the snapshot that revealed the absence (`snapshotStartedAt`:
-// when that get/list call STARTED).
-export async function processMissingTestimonial({ app, externalId, snapshotStartedAt = null }) {
+// that answered fine): same treatment as a withdrawal, applied only if this
+// observation (`observedAt`: when that get/list call STARTED) is strictly later
+// than the row's, and recorded as the row's new observed_at.
+export async function processMissingTestimonial({ app, externalId, observedAt = new Date().toISOString() }) {
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const { data: existing, error: selErr } = await supabaseAdmin
-      .from('testimonials').select('id, status, source_updated_at, updated_at').eq('app_id', app.id).eq('external_id', String(externalId)).maybeSingle()
+      .from('testimonials').select('id, status, observed_at, updated_at').eq('app_id', app.id).eq('external_id', String(externalId)).maybeSingle()
     if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
-    const d = decideGone(existing ?? null, undefined, { snapshotStartedAt })
+    const d = decideGone(existing ?? null, undefined, { observedAt })
     if (d.action === 'skip') return { ok: true, testimonial: String(externalId), stored: false, notified: false, reason: d.reason }
-    const { data, error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch())
+    const { data, error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch(null, observedAt))
       .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id')
     if (error) throw new Error(`testimonials withdraw: ${error.message}`)
     if ((data?.length ?? 0) === 0) continue
+    if (d.touch) return { ok: true, testimonial: String(externalId), stored: false, notified: false, reason: d.reason }
     await audit('ingest:testimonial', {
       target_app: app.id, target_type: 'testimonial', target_id: String(externalId),
       payload: { status: 'withdrawn', reason: d.reason },

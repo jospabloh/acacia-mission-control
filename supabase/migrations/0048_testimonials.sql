@@ -26,6 +26,7 @@ create table if not exists public.testimonials (
                      check (status in ('pending','approved','rejected','withdrawn')),
   reviewed_by        text,
   reviewed_at        timestamptz,
+  observed_at        timestamptz,   -- reloj de MC: cuándo EMPEZÓ la llamada al puente (list/get) que produjo la última escritura; una observación solo se aplica si es estrictamente posterior
   source_updated_at  timestamptz,  -- `updated_date` del registro en la app: versión que se compara antes de todo upsert y borrado por ausencia
   notified_at        timestamptz,   -- último aviso al equipo; máx. uno por hora
   created_at         timestamptz not null default now(),

@@ -16,9 +16,10 @@ export async function syncTestimonialsForApp(app, deps = {}) {
   const processMissing = deps.processMissing ?? processMissingTestimonial
   const listStored = deps.listStored ?? listStoredTestimonials
 
-  // The list reflects the app at or after this instant; a stored row newer than
-  // it was written after the snapshot and must not be erased by its absence.
-  const snapshotStartedAt = new Date().toISOString()
+  // MC's own clock when the list call STARTS: every observation this sync makes
+  // (upserts and absences) is stamped with it, and applied only if strictly
+  // later than the row's observed_at.
+  const observedAt = new Date().toISOString()
   let out
   try {
     out = await call(app, 'testimonials.list', {})
@@ -37,12 +38,12 @@ export async function syncTestimonialsForApp(app, deps = {}) {
     try { return await fn() } catch (e) { firstError ??= e.message; return null }
   }
   for (const record of body.records) {
-    const r = await attempt(() => process({ app, record, tenantName: record?.tenant_name ?? null }))
+    const r = await attempt(() => process({ app, record, tenantName: record?.tenant_name ?? null, observedAt }))
     if (r?.stored) stored += 1
   }
   const rows = await attempt(() => listStored(app.id))
   for (const row of missingFromList(rows ?? [], body.records)) {
-    const r = await attempt(() => processMissing({ app, externalId: row.external_id, snapshotStartedAt }))
+    const r = await attempt(() => processMissing({ app, externalId: row.external_id, observedAt }))
     if (r?.stored) stored += 1
   }
   return { app: app.id, testimonials: body.records.length, stored, ...(firstError ? { error: firstError } : {}) }

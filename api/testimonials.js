@@ -34,6 +34,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'no disponible' })
   }
   // max-age=0: browsers revalidate too (s-maxage alone leaves heuristic freshness to them).
-  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60')
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate, s-maxage=60')
   return res.status(200).json(buildPublicPayload(data, { app }))
 }

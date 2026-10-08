@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { testimonialReview } from '../lib/control.js'
 import { useToasts } from '../lib/useToasts.js'
@@ -22,30 +22,43 @@ function Stars({ n }) {
   return <span className="text-amber-500" title={`${n} de 5`} aria-label={`${n} de 5 estrellas`}>{'★'.repeat(n)}<span className="text-ink-faint">{'★'.repeat(5 - n)}</span></span>
 }
 
+const PAGE = 50
+const COLS = 'id, app_id, tenant_name, rating, body, author_name, author_role, status, submitted_at, reviewed_at, reviewed_by, updated_at, apps(name)'
+
 export function Testimonials() {
   const { toasts, ok, fail, dismiss } = useToasts()
-  const [rows, setRows] = useState(null) // null = cargando
+  const [rows, setRows] = useState(null) // rows of the CURRENT tab only; null = cargando
+  const [counts, setCounts] = useState(null)
+  const [more, setMore] = useState(false)
   const [tab, setTab] = useState('pending')
   const [busyId, setBusyId] = useState(null)
 
-  const load = useCallback(() => {
-    return supabase.from('testimonials')
-      .select('id, app_id, tenant_name, rating, body, author_name, author_role, status, submitted_at, reviewed_at, reviewed_by, updated_at, apps(name)')
-      .neq('status', 'withdrawn')
-      .order('submitted_at', { ascending: false, nullsFirst: false })
-      .then(({ data, error }) => {
-        if (error) { console.error(error.message); fail('No se pudieron cargar los testimonios.') }
-        setRows(data ?? [])
-      })
+  // One query per tab (status filter in the DB, never a client-side filter over
+  // a capped result), paged with "Cargar más"; counts come from head queries, so
+  // they stay right past the API's row cap. Order is deterministic (newest
+  // first, id tiebreak) so pages never skip or repeat.
+  const load = useCallback(async (status, upTo = PAGE) => {
+    const [list, ...cs] = await Promise.all([
+      supabase.from('testimonials').select(COLS).eq('status', status)
+        .order('submitted_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).range(0, upTo - 1),
+      ...TABS.map((t) => supabase.from('testimonials').select('id', { count: 'exact', head: true }).eq('status', t.value)),
+    ])
+    if (list.error || cs.some((c) => c.error)) { console.error((list.error ?? cs.find((c) => c.error).error).message); fail('No se pudieron cargar los testimonios.') }
+    setRows(list.data ?? [])
+    setMore((list.data?.length ?? 0) === upTo)
+    setCounts(Object.fromEntries(TABS.map((t, i) => [t.value, cs[i].count ?? 0])))
   }, [fail])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { setRows(null); load(tab) }, [load, tab])
 
-  const counts = useMemo(() => {
-    const c = { pending: 0, approved: 0, rejected: 0 }
-    for (const r of rows ?? []) if (c[r.status] !== undefined) c[r.status] += 1
-    return c
-  }, [rows])
-  const shown = (rows ?? []).filter((r) => r.status === tab)
+  async function loadMore() {
+    const from = rows.length
+    const { data, error } = await supabase.from('testimonials').select(COLS).eq('status', tab)
+      .order('submitted_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).range(from, from + PAGE - 1)
+    if (error) { console.error(error.message); fail('No se pudieron cargar más testimonios.'); return }
+    setRows((r) => [...r, ...(data ?? [])])
+    setMore((data?.length ?? 0) === PAGE)
+  }
+  const shown = rows ?? []
 
   async function decide(row, op, done) {
     setBusyId(row.id)
@@ -56,7 +69,7 @@ export function Testimonials() {
       fail(e.message)
     } finally {
       setBusyId(null)
-      await load()
+      await load(tab, Math.max(PAGE, rows?.length ?? PAGE))
     }
   }
 
@@ -64,7 +77,7 @@ export function Testimonials() {
     <div>
       <PageHeader title="Testimonios" subtitle="Lo que dejan los clientes desde Soporte. Solo los aprobados se publican en la web; el texto no se edita." />
       <FilterChips ariaLabel="Estado" value={tab} onChange={setTab}
-        options={TABS.map((t) => ({ ...t, count: rows ? counts[t.value] : undefined }))} />
+        options={TABS.map((t) => ({ ...t, count: counts ? counts[t.value] : undefined }))} />
 
       <div className="mt-4 space-y-3">
         {rows === null && <p className="text-sm text-ink-mute">Cargando…</p>}
@@ -98,6 +111,7 @@ export function Testimonials() {
             </div>
           </article>
         ))}
+        {more && rows !== null && <div className="text-center"><Button variant="secondary" size="sm" onClick={loadMore}>Cargar más</Button></div>}
       </div>
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>

@@ -129,12 +129,41 @@ test('withdrawnPatch = erase fields (+ source version when known)', () => {
   assert.deepEqual(withdrawnPatch(), { ...WITHDRAWN_FIELDS })
   assert.deepEqual(withdrawnPatch(V2), { ...WITHDRAWN_FIELDS, source_updated_at: V2 })
 })
-test('decideGone: a row newer than the snapshot start is NOT erased by absence', () => {
-  const row = { id: 'u', status: 'approved', source_updated_at: V3 }
-  assert.equal(decideGone(row, undefined, { snapshotStartedAt: V2 }).action, 'skip')
-  assert.equal(decideGone(row, undefined, { snapshotStartedAt: V3 }).action, 'update') // not newer than
-  assert.equal(decideGone(row, undefined, { snapshotStartedAt: '2026-10-04T00:00:00Z' }).erase, true)
-  assert.equal(decideGone(row).erase, true) // no snapshot time given → old behaviour
+const T1 = '2026-10-05T10:00:00Z', T2 = '2026-10-05T10:05:00Z', T3 = '2026-10-05T10:10:00Z'
+test('observed_at: an observation not strictly later than the stored one is skipped (upsert, gone, withdrawn record)', () => {
+  const row = stored('approved', { observed_at: T2 })
+  for (const t of [T1, T2]) {
+    assert.equal(decideUpsert(row, inc({ updated_date: V3, rating: 2 }), t).reason, 'observación anterior a la guardada')
+    assert.equal(decideGone(row, undefined, { observedAt: t }).action, 'skip')
+    assert.equal(decideUpsert(row, inc({ status: 'withdrawn', updated_date: V3 }), t).action, 'skip')
+  }
+  const d = decideUpsert(row, inc({ updated_date: V3, rating: 2 }), T3)
+  assert.deepEqual([d.action, d.status], ['update', 'pending'])
+  assert.equal(decideGone(row, undefined, { observedAt: T3 }).erase, true)
+})
+test('MC1: after a record:null erase, a delayed older snapshot with a NEWER updated_date cannot restore the text', () => {
+  // erase at T2 kept source_updated_at V1 and stamped observed_at T2
+  const erasedRow = stored('withdrawn', { ...erased, source_updated_at: V1, observed_at: T2 })
+  assert.equal(decideUpsert(erasedRow, inc({ updated_date: V3 }), T1).action, 'skip')
+  // a genuinely newer observation of a newer resubmission is NOT blocked by the old version
+  const d = decideUpsert(erasedRow, inc({ updated_date: V3 }), T3)
+  assert.deepEqual([d.action, d.status], ['update', 'pending'])
+})
+test('an already-withdrawn row is only touched by a newer observation (observed_at moves, nothing else)', () => {
+  const w = stored('withdrawn', { ...erased, observed_at: T1 })
+  const d = decideGone(w, undefined, { observedAt: T2 })
+  assert.deepEqual([d.action, d.touch, d.erase], ['update', true, true])
+  assert.equal(decideGone(w).action, 'skip')
+  assert.equal(decideGone(w, undefined, { observedAt: T1 }).action, 'skip')
+})
+test('withdrawnPatch stamps observed_at', () => {
+  assert.deepEqual(withdrawnPatch(null, T2), { ...WITHDRAWN_FIELDS, observed_at: T2 })
+})
+test('alert e-mail is non-personal: no name, role or text', async () => {
+  const { renderTestimonialAlert } = await import('./testimonialAlert.js')
+  const a = renderTestimonialAlert({ appName: 'Rumbo', tenantName: 'Café Ana', rating: 5, body: 'TEXTO-SECRETO', authorName: 'NOMBRE-SECRETO', authorRole: 'ROL-SECRETO', link: 'https://x.mx/testimonials' })
+  for (const t of ['TEXTO-SECRETO', 'NOMBRE-SECRETO', 'ROL-SECRETO']) assert.ok(!a.html.includes(t) && !a.subject.includes(t), t)
+  assert.ok(a.html.includes('Café Ana'))
 })
 test('fetchAllPages reads past the 1000-row cap and stops on a short page', async () => {
   const calls = []
@@ -403,4 +432,16 @@ test('ping: record:null withdraws the stored row; a record goes to the upsert wi
     processIncoming: async (a) => { calls.push(['incoming', a.tenantName]); return { reason: 'ok' } },
   }))
   assert.deepEqual(calls, [['missing', 'tm123456'], ['incoming', 'Café Ana']])
+})
+
+test('sync stamps every upsert and every absence with the SAME observed_at (the list call start)', async () => {
+  const seen = []
+  await syncTestimonialsForApp(app, {
+    call: async () => ({ ok: true, records: [{ id: 'a' }] }),
+    process: async ({ observedAt }) => { seen.push(observedAt); return { stored: false } },
+    processMissing: async ({ observedAt }) => { seen.push(observedAt); return { stored: false } },
+    listStored: async () => [{ external_id: 'z', status: 'pending' }],
+  })
+  assert.equal(seen.length, 2)
+  assert.ok(seen[0] && seen[0] === seen[1])
 })
