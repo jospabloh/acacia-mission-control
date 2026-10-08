@@ -26,6 +26,7 @@ create table if not exists public.testimonials (
                      check (status in ('pending','approved','rejected','withdrawn')),
   reviewed_by        text,
   reviewed_at        timestamptz,
+  withdrawn_at       timestamptz,   -- cuándo se borró el texto; un registro con consent_at anterior no lo restaura
   notified_at        timestamptz,   -- último aviso al equipo; máx. uno por hora
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),

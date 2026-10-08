@@ -1,4 +1,4 @@
-// Pure rules for the testimonials feature (contract v1.1, Module 29 of
+// Pure rules for the testimonials feature (contract v1.2, Module 29 of
 // acacia-app-standard). No imports, so `node --test` loads it without
 // Supabase or the bridge.
 
@@ -20,9 +20,18 @@ export function isUnknownAction(err) {
 
 // ── Validation (fail-closed, contract §4) ────────────────────────────────────
 const len = (s) => [...s].length
+// Strict ISO-8601: a date, or a date-time that carries Z/offset. Date.parse alone
+// would roll 2026-02-30 over to March 2nd, so the calendar parts are round-tripped.
+const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?$/
 const validDate = (v) => {
-  if (typeof v !== 'string' || !v) return null
-  const t = Date.parse(v)
+  if (typeof v !== 'string') return null
+  const m = ISO_RE.exec(v.trim())
+  if (!m) return null
+  const [y, mo, d, h = 0, mi = 0, sec = 0] = m.slice(1, 7).map((x) => (x === undefined ? 0 : Number(x)))
+  if (h > 23 || mi > 59 || sec > 59) return null
+  const cal = new Date(Date.UTC(y, mo - 1, d))
+  if (cal.getUTCFullYear() !== y || cal.getUTCMonth() !== mo - 1 || cal.getUTCDate() !== d) return null
+  const t = Date.parse(v.trim())
   return Number.isNaN(t) ? null : new Date(t).toISOString()
 }
 
@@ -69,6 +78,9 @@ export const contentChanged = (a, b) => CONTENT.some((k) => (a[k] ?? null) !== (
 export const WITHDRAWN_FIELDS = Object.freeze({
   status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false,
 })
+// The write for a withdrawal: the erase plus WHEN it happened (`withdrawn_at`),
+// which decideUpsert compares against a later record's consent_at.
+export const withdrawnPatch = (now = new Date()) => ({ ...WITHDRAWN_FIELDS, withdrawn_at: new Date(now).toISOString() })
 
 // Upsert decision table (contract §4). `existing` = bodega row or null.
 // Returns { action: 'skip'|'insert'|'update', status?, notify, reason }.
@@ -78,7 +90,17 @@ export function decideUpsert(existing, incoming) {
   if (!incoming.publishable) return decideGone(existing, 'retirado o no publicable')
 
   if (!existing) return { action: 'insert', status: 'pending', notify: true, reason: 'nuevo' }
-  if (existing.status === 'withdrawn') return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
+  if (existing.status === 'withdrawn') {
+    // Restore only a submission made AFTER the withdrawal. A record fetched just
+    // before the user withdrew (stale sync list, delayed ping) carries an older
+    // consent_at and must not bring the erased text back.
+    const since = Date.parse(existing.withdrawn_at ?? existing.updated_at ?? '')
+    const at = Date.parse(incoming.consent_at ?? '')
+    if (Number.isNaN(at) || (!Number.isNaN(since) && at <= since)) {
+      return { action: 'skip', notify: false, reason: 'registro anterior al retiro' }
+    }
+    return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
+  }
   if (!contentChanged(existing, incoming)) return { action: 'skip', notify: false, reason: 'sin cambios' }
   if (existing.status === 'approved' || existing.status === 'rejected') {
     return { action: 'update', status: 'pending', notify: true, reason: 'contenido cambiado' }

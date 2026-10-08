@@ -1,5 +1,6 @@
 // PUBLIC testimonials feed for acaciaco.com.mx (contract §6). No auth, CORS *,
-// cached at the edge. Reads with the service role, but ONLY approved+consented
+// cached at the edge for at most 60 s (no stale-while-revalidate: a withdrawn
+// testimonial must stop being served within that bound). Reads with the service role, but ONLY approved+consented
 // rows and ONLY through buildPublicPayload()'s allowlist — nothing else in the
 // row (tenant, e-mail, ids) can reach the response.
 import { supabaseAdmin, requireSupabase } from './_lib/supabaseAdmin.js'
@@ -19,6 +20,6 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ ok: false, error: 'no disponible' })
 
   const app = typeof req.query?.app === 'string' && req.query.app ? req.query.app : null
-  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+  res.setHeader('Cache-Control', 'public, s-maxage=60')
   return res.status(200).json(buildPublicPayload(data ?? [], { app }))
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   siteSlug, appIdForSlug, isUnknownAction, normalizeRecord, decideUpsert, decideGone, missingFromList,
   canNotify, notifyCutoff, reviewTransition, reviewDecision, mexicoMonth, publicItem, buildPublicPayload,
-  WITHDRAWN_FIELDS,
+  WITHDRAWN_FIELDS, withdrawnPatch,
 } from './testimonials.js'
 import { syncTestimonialsForApp } from './sync/syncTestimonials.js'
 import { runPing } from './ingest/testimonial-pull.js'
@@ -87,6 +87,46 @@ test('upsert: pending + changed stays pending without notice; unchanged → skip
 test('upsert: withdrawn + valid resubmission → pending + notify (content restored by the update)', () => {
   const d = decideUpsert(stored('withdrawn', { body: '', author_name: '', consent_publish: false }), inc())
   assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
+})
+test('upsert: stale record (consent_at before the withdrawal) after withdrawal → skip, row stays erased', () => {
+  const w = stored('withdrawn', { body: '', author_name: '', consent_publish: false, withdrawn_at: '2026-10-02T09:00:00Z' })
+  const d = decideUpsert(w, inc({ consent_at: '2026-10-01T10:00:00Z' }))
+  assert.deepEqual([d.action, d.notify], ['skip', false])
+  assert.equal(decideUpsert(w, inc({ consent_at: '2026-10-02T09:00:00Z' })).action, 'skip') // equal is not newer
+})
+test('upsert: genuinely new submission after the withdrawal → pending with the new content', () => {
+  const w = stored('withdrawn', { body: '', author_name: '', consent_publish: false, withdrawn_at: '2026-10-02T09:00:00Z' })
+  const d = decideUpsert(w, inc({ consent_at: '2026-10-03T08:00:00Z' }))
+  assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
+})
+test('upsert: legacy withdrawn row without withdrawn_at falls back to updated_at', () => {
+  const w = stored('withdrawn', { withdrawn_at: null, updated_at: '2026-10-02T09:00:00Z' })
+  assert.equal(decideUpsert(w, inc({ consent_at: '2026-10-01T10:00:00Z' })).action, 'skip')
+  assert.equal(decideUpsert(w, inc({ consent_at: '2026-10-03T10:00:00Z' })).action, 'update')
+})
+test('withdrawnPatch = erase fields + withdrawn_at', () => {
+  assert.deepEqual(withdrawnPatch(new Date('2026-10-02T09:00:00Z')), { ...WITHDRAWN_FIELDS, withdrawn_at: '2026-10-02T09:00:00.000Z' })
+})
+test('upsert: a withdrawn record with EMPTY body/name/role is accepted as a withdrawal (erases a live row, skips a withdrawn one)', () => {
+  const o = { status: 'withdrawn', body: '', author_name: '', author_role: '', consent_publish: false }
+  const n = inc(o)
+  assert.equal(n.publishable, false)
+  assert.deepEqual([n.body, n.author_name, n.author_role], ['', '', null])
+  for (const status of ['pending', 'approved', 'rejected']) {
+    const d = decideUpsert(stored(status), n)
+    assert.deepEqual([d.action, d.status, d.erase], ['update', 'withdrawn', true], status)
+  }
+  assert.equal(decideUpsert(stored('withdrawn'), n).action, 'skip')
+  assert.equal(decideUpsert(null, n).action, 'skip')
+})
+test('normalizeRecord: consent_at is strict ISO-8601 with real calendar dates', () => {
+  for (const v of ['2026-02-30T10:00:00Z', '2026-13-01T10:00:00Z', '2026-02-30', '2026-04-31T00:00:00Z', 'garbage', '2026-10-01T10:00:00', '2026-10-01T25:00:00Z', '1 Oct 2026', '']) {
+    assert.equal(normalizeRecord(rec({ consent_at: v })).publishable, false, v)
+  }
+  for (const v of ['2026-10-01T10:00:00Z', '2026-10-01T10:00:00.123Z', '2026-10-01T04:00:00-06:00', '2026-10-01', '2028-02-29T00:00:00Z']) {
+    assert.equal(normalizeRecord(rec({ consent_at: v })).publishable, true, v)
+  }
+  assert.equal(normalizeRecord(rec({ consent_at: '2026-10-01T04:00:00-06:00' })).consent_at, '2026-10-01T10:00:00.000Z')
 })
 test('upsert: not publishable with a live row → withdrawn AND erase; with withdrawn row → skip', () => {
   for (const status of ['pending', 'approved', 'rejected']) {

@@ -5,7 +5,7 @@
 import { supabaseAdmin, audit } from './supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from './appBridge.js'
 import { alertRecipients } from './ingestTicket.js'
-import { normalizeRecord, decideUpsert, decideGone, notifyCutoff, WITHDRAWN_FIELDS } from './testimonials.js'
+import { normalizeRecord, decideUpsert, decideGone, notifyCutoff, withdrawnPatch } from './testimonials.js'
 import { renderTestimonialAlert } from './testimonialAlert.js'
 
 // Best-effort, like the new-ticket alert: never throws.
@@ -65,7 +65,7 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
   let rowId = existing?.id
   let error
   if (d.erase) {
-    ;({ error } = await supabaseAdmin.from('testimonials').update(WITHDRAWN_FIELDS).eq('id', existing.id))
+    ;({ error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch()).eq('id', existing.id))
   } else {
     const fields = {
       tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
@@ -106,7 +106,7 @@ export async function processMissingTestimonial({ app, externalId }) {
   if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
   const d = decideGone(existing ?? null)
   if (d.action === 'skip') return { ok: true, testimonial: String(externalId), stored: false, notified: false, reason: d.reason }
-  const { error } = await supabaseAdmin.from('testimonials').update(WITHDRAWN_FIELDS).eq('id', existing.id)
+  const { error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch()).eq('id', existing.id)
   if (error) throw new Error(`testimonials withdraw: ${error.message}`)
   await audit('ingest:testimonial', {
     target_app: app.id, target_type: 'testimonial', target_id: String(externalId),
