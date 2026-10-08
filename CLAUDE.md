@@ -486,7 +486,7 @@ llegó con `via: sync` y sin registro de correo — el ping se había perdido.
 
 ## Testimonios: la app los guarda, MC los revisa, la web publica los aprobados (2026-10-07)
 
-Contrato: **Módulo 29 de `jospabloh/acacia-app-standard`** (v1.5). Si el código y el módulo difieren, se
+Contrato: **Módulo 29 de `jospabloh/acacia-app-standard`** (v1.6). Si el código y el módulo difieren, se
 corrigen los dos en el mismo cambio.
 
 - **Tabla `testimonials`** (migración `0048`): `status` propio de MC (`pending | approved | rejected |
@@ -512,15 +512,15 @@ corrigen los dos en el mismo cambio.
   posterior a la de la fila, y los borrados la sellan (una fila ya retirada solo la avanza), así que una
   lectura vieja no revive texto aunque traiga `updated_date` más nuevo. `updated_date` (`source_updated_at`) es
   guarda secundaria: solo rechaza un registro que no es más nuevo que lo guardado. Una observación nueva que no cambia nada
-  avanza `observed_at` (touch, compare-and-swap) y una fila borrada por `record:null`/ausencia se restaura con una
+  avanza `observed_at` (touch, compare-and-swap; con versión más nueva guarda también `source_updated_at` y metadatos) y una fila borrada por `record:null`/ausencia se restaura con una
   observación posterior de versión igual o mayor. La ausencia lee TODAS las filas guardadas (paginado). Un
-  `submitted` sin `updated_date` válido no es publicable. Todos los UPDATE son compare-and-swap sobre `updated_at` (trigger) y
+  `submitted` sin `updated_date` válido no es publicable. Todos los UPDATE son compare-and-swap sobre `updated_at` (trigger; siempre el string leído de la BD, nunca ms parseados; el 409 de revisión compara el string crudo) y
   reintentan una vez; un 23505 en el insert es la misma carrera. Se conservan `rating`, tenant y fechas.
 - **Upsert**: nuevo → `pending` (avisa); `pending` + cambio → `pending` (sin aviso); `approved`/`rejected`
   + cambio → `pending` (avisa); `withdrawn` + reenvío con versión posterior → `pending` (avisa); sin cambios → nada.
 - **Aviso** NO personal (sin nombre, rol, texto ni nombre del negocio, ni en `alerts` ni en el correo: retirar solo borra `testimonials`) (`alerts.kind = 'testimonial'` + correo a `SUPPORT_ALERT_EMAILS`, enviado por el puente de la
   propia app como los tickets): máximo uno por hora por testimonio. `notified_at` se reclama con un solo
-  UPDATE condicional que además exige `status='pending'` y el `updated_at` recién escrito (si hubo retiro en medio, no se avisa), así que un ping y el sync a la vez no lo duplican.
+  UPDATE condicional que además exige `status='pending'` y la misma `source_updated_at` que escribió quien notifica (no `updated_at`: un touch no la invalida; relee y reintenta una vez; si hubo retiro o contenido nuevo, no se avisa), así que un ping y el sync a la vez no lo duplican.
 - **Revisión**: `POST /api/control/testimonial-review {id, op, updatedAt}` (`approve | reject | unpublish`,
   admin+, por `audit()`). `updatedAt` es el de la fila que el revisor vio; si cambió → 409 y la página
   recarga. El UPDATE además va guardado por `status` y `updated_at`. `withdrawn` no se revisa. La página consulta por pestaña (filtro de estado en la BD, orden `submitted_at` desc + id, "Cargar más" de 50; una respuesta vieja nunca pisa a la última petición) y los conteos salen de consultas `head`, así que siguen bien pasado el tope de filas de la API.

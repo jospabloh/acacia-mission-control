@@ -35,6 +35,7 @@ export function Testimonials() {
   // Only the latest request may write state: switching tabs mid-load, or a
   // reload after a review, must not let an older response resolve last and win.
   const reqId = useRef(0)
+  const tabRef = useRef('pending') // the tab on screen NOW (decide() may finish after a tab switch)
 
   // One query per tab (status filter in the DB, never a client-side filter over
   // a capped result), paged with "Cargar más"; counts come from head queries, so
@@ -53,7 +54,7 @@ export function Testimonials() {
     setMore((list.data?.length ?? 0) === upTo)
     setCounts(Object.fromEntries(TABS.map((t, i) => [t.value, cs[i].count ?? 0])))
   }, [fail])
-  useEffect(() => { setRows(null); load(tab) }, [load, tab])
+  useEffect(() => { tabRef.current = tab; setRows(null); load(tab) }, [load, tab])
 
   async function loadMore() {
     const mine = reqId.current
@@ -76,7 +77,7 @@ export function Testimonials() {
       fail(e.message)
     } finally {
       setBusyId(null)
-      await load(tab, Math.max(PAGE, rows?.length ?? PAGE))
+      await load(tabRef.current, tabRef.current === tab ? Math.max(PAGE, rows?.length ?? PAGE) : PAGE)
     }
   }
 

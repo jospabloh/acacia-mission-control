@@ -1,4 +1,4 @@
-// Pure rules for the testimonials feature (contract v1.5, Module 29 of
+// Pure rules for the testimonials feature (contract v1.6, Module 29 of
 // acacia-app-standard). No imports, so `node --test` loads it without
 // Supabase or the bridge.
 
@@ -123,8 +123,11 @@ export function decideUpsert(existing, incoming, observedAt = null) {
   // A successful observation that changes nothing still ADVANCES observed_at
   // (`touch`): otherwise an earlier-started record:null / absence that completes
   // afterwards would still see the old marker and erase a row we just saw alive.
+  // When the record's version is NEWER but nothing the reviewer sees changed (only
+  // metadata), the touch also carries that version and metadata (`refresh`), so a
+  // later-starting read of an intermediate version cannot pass the version guard.
   const touch = (reason) => (observedAt
-    ? { action: 'update', status: existing.status, touch: true, notify: false, reason }
+    ? { action: 'update', status: existing.status, touch: true, refresh: seen !== null && (have === null || seen > have), notify: false, reason }
     : { action: 'skip', notify: false, reason })
   if (existing.status === 'withdrawn') {
     // Secondary guard: only a provably OLDER version is a stale read. An EQUAL
@@ -188,9 +191,11 @@ export function reviewTransition(current, op) {
 // A stale `updatedAt` is a 409: nobody approves text they did not read.
 export function reviewDecision(row, { op, updatedAt }) {
   if (!row) return { code: 404, error: 'testimonio no encontrado' }
-  const seen = typeof updatedAt === 'string' ? Date.parse(updatedAt) : NaN
-  if (Number.isNaN(seen)) return { code: 400, error: 'falta updatedAt' }
-  if (seen !== Date.parse(row.updated_at)) return { code: 409, error: 'el testimonio cambió mientras lo revisabas; recarga' }
+  if (typeof updatedAt !== 'string' || !updatedAt) return { code: 400, error: 'falta updatedAt' }
+  // RAW string equality, never parsed milliseconds: Postgres keeps microseconds
+  // and Date.parse drops them, so two distinct versions could compare equal.
+  // `updatedAt` is the string the page read from the same API as `row.updated_at`.
+  if (updatedAt !== row.updated_at) return { code: 409, error: 'el testimonio cambió mientras lo revisabas; recarga' }
   const t = reviewTransition(row.status, op)
   if (t.error) return { code: 409, error: t.error }
   return { status: t.status }

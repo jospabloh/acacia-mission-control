@@ -5,7 +5,7 @@
 import { supabaseAdmin, audit } from './supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from './appBridge.js'
 import { alertRecipients } from './ingestTicket.js'
-import { fetchAllPages, normalizeRecord, decideUpsert, decideGone, notifyCutoff, withdrawnPatch } from './testimonials.js'
+import { fetchAllPages, canNotify, normalizeRecord, decideUpsert, decideGone, notifyCutoff, withdrawnPatch } from './testimonials.js'
 import { renderTestimonialAlert } from './testimonialAlert.js'
 
 // Best-effort, like the new-ticket alert: never throws.
@@ -41,18 +41,27 @@ async function notifyReviewers(app, row) {
 
 // At most ONE alert per testimonial per hour, and a ping racing the sync can't
 // double it: the claim is a single conditional UPDATE, so only one caller sees a
-// row come back. It also requires the row to be STILL the pending version this
-// caller wrote (`updated_at` as returned by that write): a withdrawal or newer
-// write in between makes the claim fail and nothing is sent. Returns true when
-// this caller owns the notification.
-async function claimNotification(id, writtenUpdatedAt) {
-  if (!writtenUpdatedAt) return false
-  const now = new Date().toISOString()
+// row come back. It requires the row to still be `pending` at the SAME content
+// version this caller wrote (`source_updated_at`), and `notified_at` null or
+// older than the throttle window. It deliberately does NOT require `updated_at`:
+// a concurrent unchanged observation only touches that, and must not make the
+// claim fail while the notice is still owed. A withdrawal (status) or newer
+// content (version) still makes it fail, so nothing stale is announced.
+async function claimOnce(id, version) {
   const { data, error } = await supabaseAdmin
-    .from('testimonials').update({ notified_at: now })
-    .eq('id', id).eq('status', 'pending').eq('updated_at', writtenUpdatedAt)
+    .from('testimonials').update({ notified_at: new Date().toISOString() })
+    .eq('id', id).eq('status', 'pending').eq('source_updated_at', version)
     .or(`notified_at.is.null,notified_at.lt.${notifyCutoff()}`).select('id')
   return !error && (data?.length ?? 0) > 0
+}
+// On failure, re-read once and retry while the same version is still pending and
+// not yet notified. Returns true when this caller owns the notification.
+async function claimNotification(id, version) {
+  if (!version) return false
+  if (await claimOnce(id, version)) return true
+  const { data } = await supabaseAdmin.from('testimonials').select('status, source_updated_at, notified_at').eq('id', id).maybeSingle()
+  if (data?.status !== 'pending' || Date.parse(data.source_updated_at) !== Date.parse(version) || !canNotify(data.notified_at)) return false
+  return claimOnce(id, version)
 }
 
 // Writes are compare-and-swap on the row version (`updated_at`, bumped by a
@@ -79,12 +88,16 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
     if (d.action === 'skip') return skipped
 
     let rowId = existing?.id
-    let writtenAt = null // updated_at of the row as WE wrote it (the notification claim needs it)
     let error
     let lost = false
     if (d.erase || d.touch) {
       // Erase, or a touch (observed_at only; a withdrawn row keeps its erase patch).
-      const patch = d.erase ? withdrawnPatch(d.sourceUpdatedAt, observedAt) : { observed_at: observedAt }
+      const patch = d.erase ? withdrawnPatch(d.sourceUpdatedAt, observedAt)
+        : d.refresh ? {
+          observed_at: observedAt, source_updated_at: incoming.source_updated_at, consent_at: incoming.consent_at,
+          submitted_at: incoming.submitted_at, tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
+        }
+          : { observed_at: observedAt }
       const r = await supabaseAdmin.from('testimonials').update(patch)
         .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id, updated_at')
       error = r.error
@@ -101,14 +114,12 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
         const r = await supabaseAdmin.from('testimonials').insert({ app_id: app.id, external_id: incoming.external_id, ...fields }).select('id, updated_at').maybeSingle()
         error = r.error
         rowId = r.data?.id
-        writtenAt = r.data?.updated_at
         if (error?.code === '23505') { error = null; lost = true } // the other writer got there first
       } else {
         const r = await supabaseAdmin.from('testimonials').update(fields)
           .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id, updated_at')
         error = r.error
         lost = !error && (r.data?.length ?? 0) === 0
-        writtenAt = r.data?.[0]?.updated_at
       }
     }
     if (error) throw new Error(`testimonials ${d.action}: ${error.message}`)
@@ -117,7 +128,7 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
 
     let email = null
     let notified = false
-    if (d.notify && rowId && await claimNotification(rowId, writtenAt)) {
+    if (d.notify && rowId && await claimNotification(rowId, incoming.source_updated_at)) {
       notified = true
       email = await notifyReviewers(app, { ...incoming, status: d.status })
     }

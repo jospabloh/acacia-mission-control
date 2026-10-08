@@ -256,17 +256,23 @@ test('review transitions', () => {
   assert.ok(reviewTransition('pending', 'delete').error)
   for (const op of ['approve', 'reject', 'unpublish']) assert.ok(reviewTransition('withdrawn', op).error)
 })
-test('review race: stale updated_at → 409, fresh → decision, missing → 400, no row → 404', () => {
+test('review race: stale updated_at → 409, identical raw string → decision, missing → 400, no row → 404', () => {
   const row = { status: 'pending', updated_at: '2026-10-07T10:00:00.123456+00:00' }
-  assert.deepEqual(reviewDecision(row, { op: 'approve', updatedAt: '2026-10-07T10:00:00.123Z' }), { status: 'approved' })
+  assert.deepEqual(reviewDecision(row, { op: 'approve', updatedAt: '2026-10-07T10:00:00.123456+00:00' }), { status: 'approved' })
   assert.equal(reviewDecision(row, { op: 'approve', updatedAt: '2026-10-07T09:59:00Z' }).code, 409)
+  // two distinct microsecond versions that parse to the same millisecond are NOT the same version
+  assert.equal(reviewDecision(row, { op: 'approve', updatedAt: '2026-10-07T10:00:00.123999+00:00' }).code, 409)
   assert.equal(reviewDecision(row, { op: 'approve' }).code, 400)
-  assert.equal(reviewDecision(row, { op: 'approve', updatedAt: 'x' }).code, 400)
+  assert.equal(reviewDecision(row, { op: 'approve', updatedAt: '' }).code, 400)
   assert.equal(reviewDecision(null, { op: 'approve', updatedAt: 'x' }).code, 404)
-  // a withdrawal that landed after the reviewer loaded the page changes updated_at → 409, never approved
-  const withdrawn = { status: 'withdrawn', updated_at: '2026-10-07T10:05:00Z' }
-  assert.equal(reviewDecision(withdrawn, { op: 'approve', updatedAt: '2026-10-07T10:05:00Z' }).code, 409)
-  assert.equal(reviewDecision(withdrawn, { op: 'approve', updatedAt: '2026-10-07T10:00:00Z' }).code, 409)
+})
+test('MC1 (round 6): a newer version with only metadata changed touches AND refreshes the version', () => {
+  const live = stored('approved', { source_updated_at: V1, observed_at: T1 })
+  const d = decideUpsert(live, inc({ updated_date: V2, consent_at: V2 }), T2)
+  assert.deepEqual([d.action, d.touch, d.refresh], ['update', true, true])
+  // an equal/older version, or a withdrawn-row stale touch, does not refresh
+  assert.equal(decideUpsert(live, inc({ updated_date: V1 }), T2).refresh, false)
+  assert.equal(decideUpsert(stored('withdrawn', { ...erased, source_updated_at: V2 }), inc({ updated_date: V1 }), T2).refresh, false)
 })
 
 // ── slugs, month, public payload ────────────────────────────────────────────
