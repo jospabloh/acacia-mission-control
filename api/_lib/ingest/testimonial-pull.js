@@ -40,6 +40,7 @@ export async function runPing(body, deps = {}) {
     const app = await d.getApp(appId)
     if (!app || app.backend !== 'base44') return done('app desconocida')
 
+    const startedAt = new Date().toISOString()
     let out
     try {
       out = await d.callBridge(app, 'testimonials.get', { id: String(testimonialId) })
@@ -48,7 +49,7 @@ export async function runPing(body, deps = {}) {
     }
     const res = out?.data ?? out
     if (res?.ok !== true || res.record === undefined) return done('respuesta del puente inválida')
-    if (res.record === null) return done(`ausente en la app: ${(await d.processMissing({ app, externalId: testimonialId })).reason}`)
+    if (res.record === null) return done(`ausente en la app: ${(await d.processMissing({ app, externalId: testimonialId, snapshotStartedAt: startedAt })).reason}`)
 
     const r = await d.processIncoming({ app, record: res.record, tenantName: res.tenant_name ?? null })
     return done(`${r.reason}${r.notified ? ' (avisado)' : ''}`)

@@ -486,7 +486,7 @@ llegó con `via: sync` y sin registro de correo — el ping se había perdido.
 
 ## Testimonios: la app los guarda, MC los revisa, la web publica los aprobados (2026-10-07)
 
-Contrato: **Módulo 29 de `jospabloh/acacia-app-standard`** (v1.2). Si el código y el módulo difieren, se
+Contrato: **Módulo 29 de `jospabloh/acacia-app-standard`** (v1.3). Si el código y el módulo difieren, se
 corrigen los dos en el mismo cambio.
 
 - **Tabla `testimonials`** (migración `0048`): `status` propio de MC (`pending | approved | rejected |
@@ -501,17 +501,20 @@ corrigen los dos en el mismo cambio.
   **Respaldo**: el sync diario llama `testimonials.list` (`sync/syncTestimonials.js`). `unknown action` se
   omite en silencio; cualquier otro fallo es un `error` de esa sección (no aborta el resto del sync).
 - **Validación fail-closed** (`normalizeRecord`, `api/_lib/testimonials.js`): publicable solo con
-  `status === 'submitted'`, `consent_publish === true`, `consent_at` ISO-8601 estricto con día de calendario real (`2026-02-30` se rechaza), `rating` number entero
+  `status === 'submitted'`, `consent_publish === true`, `updated_date` (versión de origen, ISO estricto) y `consent_at` ISO-8601 estricto con día de calendario real (`2026-02-30` se rechaza), `rating` number entero
   1–5, `body` 20–600, `author_name` 1–80, `author_role` ≤ 80. Todo lo demás cuenta como retirado.
 - **Retirar BORRA el dato personal.** Retirado, inválido, sin consentimiento, `record:null` en el ping, o
   fila ausente de una `list` que respondió bien → `withdrawn` con `body = ''`, `author_name = ''`,
-  `author_role = null`, `consent_publish = false` y `withdrawn_at = now()` (`withdrawnPatch()`). Las apps
-  también vacían esos campos al retirar, así que un registro `withdrawn` con texto vacío es normal. Un
-  reenvío válido restaura el contenido y vuelve a `pending` SOLO si su `consent_at` es posterior a
-  `withdrawn_at` (o a `updated_at` en filas sin él); uno anterior (lista del sync vieja, ping retrasado) se
-  ignora. Se conservan `rating`, tenant y fechas.
+  `author_role = null`, `consent_publish = false` y, si el registro la trae, `source_updated_at` (`withdrawnPatch()`). Las apps
+  también vacían esos campos al retirar, así que un registro `withdrawn` con texto vacío es normal. **Versión de origen:** cada registro del
+  puente trae `updated_date`, que MC guarda como `source_updated_at`; todo registro (publicable o retirado) con
+  versión anterior o igual a la guardada se ignora, así que una lista vieja o un ping retrasado no pisan una
+  escritura más nueva (esto subsume la regla `withdrawn_at`). Un `submitted` sin versión válida no es
+  publicable. La ausencia (`record:null` / falta en la lista) solo borra filas cuyo `source_updated_at` no es
+  posterior al inicio de esa lectura. Todos los UPDATE son compare-and-swap sobre `updated_at` (trigger) y
+  reintentan una vez; un 23505 en el insert es la misma carrera. Se conservan `rating`, tenant y fechas.
 - **Upsert**: nuevo → `pending` (avisa); `pending` + cambio → `pending` (sin aviso); `approved`/`rejected`
-  + cambio → `pending` (avisa); `withdrawn` + reenvío válido posterior al retiro → `pending` (avisa); sin cambios → nada.
+  + cambio → `pending` (avisa); `withdrawn` + reenvío con versión posterior → `pending` (avisa); sin cambios → nada.
 - **Aviso** (`alerts.kind = 'testimonial'` + correo a `SUPPORT_ALERT_EMAILS`, enviado por el puente de la
   propia app como los tickets): máximo uno por hora por testimonio. `notified_at` se reclama con un solo
   UPDATE condicional, así que un ping y el sync a la vez no lo duplican.
@@ -520,7 +523,7 @@ corrigen los dos en el mismo cambio.
   recarga. El UPDATE además va guardado por `status` y `updated_at`. `withdrawn` no se revisa.
 - **Público**: `GET /api/testimonials[?app=<slug del sitio>]`. Solo `approved` con consentimiento, por la
   lista blanca `publicItem()`; `puntos` sale como `puntos-plus`. `month` = mes de la aprobación en
-  America/Mexico_City. Caché de borde de 60 s como máximo (`s-maxage=60`, sin `stale-while-revalidate`): es el plazo en que un retiro deja de servirse.
+  America/Mexico_City. Consulta paginada (todas las aprobadas, filtro `app` y orden en BD). `Cache-Control: public, max-age=0, s-maxage=60`, sin `stale-while-revalidate`: es el plazo en que un retiro deja de servirse.
 - **Funciones en `api/`: 11 de 12** (`functionBudget.test.js` lo vigila).
 
 **No verificado** (sin Supabase ni puente en el sandbox): la migración contra la base viva; los

@@ -3,14 +3,14 @@ import assert from 'node:assert/strict'
 import {
   siteSlug, appIdForSlug, isUnknownAction, normalizeRecord, decideUpsert, decideGone, missingFromList,
   canNotify, notifyCutoff, reviewTransition, reviewDecision, mexicoMonth, publicItem, buildPublicPayload,
-  WITHDRAWN_FIELDS, withdrawnPatch,
+  WITHDRAWN_FIELDS, withdrawnPatch, fetchAllPages,
 } from './testimonials.js'
 import { syncTestimonialsForApp } from './sync/syncTestimonials.js'
 import { runPing } from './ingest/testimonial-pull.js'
 
 const rec = (o = {}) => ({
   id: 'tm123456', tenant_id: 't9', rating: 5, body: 'Excelente herramienta para mi negocio.',
-  author_name: 'Ana', author_role: 'Dueña', consent_publish: true, consent_at: '2026-10-01T10:00:00Z',
+  author_name: 'Ana', author_role: 'Dueña', consent_publish: true, consent_at: '2026-10-01T10:00:00Z', updated_date: '2026-10-01T10:00:00Z',
   status: 'submitted', ...o,
 })
 const inc = (o) => normalizeRecord(rec(o), 'Café Ana')
@@ -70,42 +70,86 @@ test('upsert: not publishable without row → nothing stored', () => {
 test('upsert: approved unchanged → skip; changed (any content field) → pending + notify', () => {
   assert.equal(decideUpsert(stored('approved'), inc()).action, 'skip')
   for (const o of [{ body: 'Otro texto distinto y largo.' }, { rating: 4 }, { author_name: 'Ana B' }, { author_role: null }]) {
-    const d = decideUpsert(stored('approved'), inc(o))
+    const d = decideUpsert(stored('approved'), inc({ ...o, updated_date: '2026-10-09T00:00:00Z' }))
     assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true], JSON.stringify(o))
   }
 })
 test('upsert: rejected unchanged stays; rejected + changed → pending + notify', () => {
   assert.equal(decideUpsert(stored('rejected'), inc()).action, 'skip')
-  const d = decideUpsert(stored('rejected'), inc({ rating: 3 }))
+  const d = decideUpsert(stored('rejected'), inc({ updated_date: '2026-10-09T00:00:00Z', rating: 3 }))
   assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
 })
 test('upsert: pending + changed stays pending without notice; unchanged → skip', () => {
-  const d = decideUpsert(stored('pending'), inc({ rating: 3 }))
+  const d = decideUpsert(stored('pending'), inc({ updated_date: '2026-10-09T00:00:00Z', rating: 3 }))
   assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', false])
   assert.equal(decideUpsert(stored('pending'), inc()).action, 'skip')
 })
 test('upsert: withdrawn + valid resubmission → pending + notify (content restored by the update)', () => {
-  const d = decideUpsert(stored('withdrawn', { body: '', author_name: '', consent_publish: false }), inc())
+  const d = decideUpsert(stored('withdrawn', { body: '', author_name: '', consent_publish: false }), inc({ updated_date: '2026-10-09T00:00:00Z', }))
   assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
 })
-test('upsert: stale record (consent_at before the withdrawal) after withdrawal → skip, row stays erased', () => {
-  const w = stored('withdrawn', { body: '', author_name: '', consent_publish: false, withdrawn_at: '2026-10-02T09:00:00Z' })
-  const d = decideUpsert(w, inc({ consent_at: '2026-10-01T10:00:00Z' }))
+const V1 = '2026-10-01T10:00:00Z', V2 = '2026-10-02T09:00:00Z', V3 = '2026-10-03T08:00:00Z'
+const erased = { body: '', author_name: '', consent_publish: false }
+test('upsert: stale submitted snapshot (older version) after a newer ping → skip', () => {
+  const row = stored('pending', { source_updated_at: V2, rating: 3 })
+  const d = decideUpsert(row, inc({ updated_date: V1, rating: 5 }))
   assert.deepEqual([d.action, d.notify], ['skip', false])
-  assert.equal(decideUpsert(w, inc({ consent_at: '2026-10-02T09:00:00Z' })).action, 'skip') // equal is not newer
+  assert.equal(decideUpsert(row, inc({ updated_date: V2, rating: 5 })).action, 'skip') // equal is not newer
+  assert.equal(decideUpsert(stored('approved', { source_updated_at: V2 }), inc({ updated_date: V1, rating: 1 })).action, 'skip')
+})
+test('upsert: newer version with changed content updates as before', () => {
+  const d = decideUpsert(stored('approved', { source_updated_at: V1 }), inc({ updated_date: V2, rating: 3 }))
+  assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
+})
+test('upsert: stale WITHDRAWN snapshot after a newer resubmission → skip (no erase)', () => {
+  for (const status of ['pending', 'approved']) {
+    const row = stored(status, { source_updated_at: V3 })
+    assert.equal(decideUpsert(row, inc({ status: 'withdrawn', updated_date: V2, body: '', author_name: '' })).action, 'skip', status)
+  }
+  // a newer (or unversioned) withdrawal still erases, carrying its version
+  const d = decideUpsert(stored('approved', { source_updated_at: V1 }), inc({ status: 'withdrawn', updated_date: V2, body: '' }))
+  assert.deepEqual([d.action, d.erase, d.sourceUpdatedAt], ['update', true, '2026-10-02T09:00:00.000Z'])
+  assert.equal(decideUpsert(stored('approved', { source_updated_at: V1 }), inc({ status: 'withdrawn', updated_date: undefined, body: '' })).erase, true)
+})
+test('upsert: stale pre-withdrawal record after withdrawal → skip, row stays erased', () => {
+  const w = stored('withdrawn', { ...erased, source_updated_at: V2 })
+  assert.equal(decideUpsert(w, inc({ updated_date: V1 })).action, 'skip')
+  assert.equal(decideUpsert(w, inc({ updated_date: V2 })).action, 'skip')
 })
 test('upsert: genuinely new submission after the withdrawal → pending with the new content', () => {
-  const w = stored('withdrawn', { body: '', author_name: '', consent_publish: false, withdrawn_at: '2026-10-02T09:00:00Z' })
-  const d = decideUpsert(w, inc({ consent_at: '2026-10-03T08:00:00Z' }))
+  const w = stored('withdrawn', { ...erased, source_updated_at: V2 })
+  const d = decideUpsert(w, inc({ updated_date: V3, consent_at: V3 }))
   assert.deepEqual([d.action, d.status, d.notify], ['update', 'pending', true])
 })
-test('upsert: legacy withdrawn row without withdrawn_at falls back to updated_at', () => {
-  const w = stored('withdrawn', { withdrawn_at: null, updated_at: '2026-10-02T09:00:00Z' })
-  assert.equal(decideUpsert(w, inc({ consent_at: '2026-10-01T10:00:00Z' })).action, 'skip')
-  assert.equal(decideUpsert(w, inc({ consent_at: '2026-10-03T10:00:00Z' })).action, 'update')
+test('submitted record without a valid updated_date fails closed', () => {
+  for (const v of [undefined, null, '', 'ayer', '2026-02-30T10:00:00Z', 5]) assert.equal(normalizeRecord(rec({ updated_date: v })).publishable, false, String(v))
+  assert.equal(normalizeRecord(rec()).source_updated_at, '2026-10-01T10:00:00.000Z')
 })
-test('withdrawnPatch = erase fields + withdrawn_at', () => {
-  assert.deepEqual(withdrawnPatch(new Date('2026-10-02T09:00:00Z')), { ...WITHDRAWN_FIELDS, withdrawn_at: '2026-10-02T09:00:00.000Z' })
+test('withdrawnPatch = erase fields (+ source version when known)', () => {
+  assert.deepEqual(withdrawnPatch(), { ...WITHDRAWN_FIELDS })
+  assert.deepEqual(withdrawnPatch(V2), { ...WITHDRAWN_FIELDS, source_updated_at: V2 })
+})
+test('decideGone: a row newer than the snapshot start is NOT erased by absence', () => {
+  const row = { id: 'u', status: 'approved', source_updated_at: V3 }
+  assert.equal(decideGone(row, undefined, { snapshotStartedAt: V2 }).action, 'skip')
+  assert.equal(decideGone(row, undefined, { snapshotStartedAt: V3 }).action, 'update') // not newer than
+  assert.equal(decideGone(row, undefined, { snapshotStartedAt: '2026-10-04T00:00:00Z' }).erase, true)
+  assert.equal(decideGone(row).erase, true) // no snapshot time given → old behaviour
+})
+test('fetchAllPages reads past the 1000-row cap and stops on a short page', async () => {
+  const calls = []
+  const rows = Array.from({ length: 2300 }, (_, i) => ({ id: i }))
+  const all = await fetchAllPages(async (from, to) => { calls.push([from, to]); return rows.slice(from, to + 1) })
+  assert.equal(all.length, 2300)
+  assert.deepEqual(calls, [[0, 999], [1000, 1999], [2000, 2999]])
+  assert.equal((await fetchAllPages(async () => [])).length, 0)
+})
+test('public payload: equal reviewed_at falls back to a deterministic id order', () => {
+  const t = '2026-10-05T00:00:00Z'
+  const a = buildPublicPayload([row({ id: 'a', body: 'A', reviewed_at: t }), row({ id: 'b', body: 'B', reviewed_at: t })])
+  const b = buildPublicPayload([row({ id: 'b', body: 'B', reviewed_at: t }), row({ id: 'a', body: 'A', reviewed_at: t })])
+  assert.deepEqual(a.items.map((x) => x.body), ['B', 'A'])
+  assert.deepEqual(b.items, a.items)
 })
 test('upsert: a withdrawn record with EMPTY body/name/role is accepted as a withdrawal (erases a live row, skips a withdrawn one)', () => {
   const o = { status: 'withdrawn', body: '', author_name: '', author_role: '', consent_publish: false }

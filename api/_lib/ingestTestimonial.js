@@ -49,70 +49,97 @@ async function claimNotification(id) {
   return !error && (data?.length ?? 0) > 0
 }
 
+// Writes are compare-and-swap on the row version (`updated_at`, bumped by a
+// trigger on every update): a withdrawal or another ingest that lands between
+// our SELECT and our UPDATE makes the UPDATE match 0 rows, and we re-read and
+// re-decide (once) instead of overwriting it with a stale snapshot. A unique
+// violation on insert is the same "lost the race".
+const ATTEMPTS = 2
+const lostRace = (id, reason = 'conflicto de escritura, se reintenta en el próximo sync') =>
+  ({ ok: true, testimonial: String(id), stored: false, notified: false, reason })
+
 // record: the app's Testimonial entity; tenantName: from the bridge answer.
 // Returns { ok, testimonial, stored, status?, notified, reason }. Throws only on
 // a hard DB error.
 export async function processIncomingTestimonial({ app, record, tenantName = null }) {
   const incoming = normalizeRecord(record, tenantName)
-  const { data: existing, error: selErr } = await supabaseAdmin
-    .from('testimonials').select('*').eq('app_id', app.id).eq('external_id', incoming.external_id).maybeSingle()
-  if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const { data: existing, error: selErr } = await supabaseAdmin
+      .from('testimonials').select('*').eq('app_id', app.id).eq('external_id', incoming.external_id).maybeSingle()
+    if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
 
-  const d = decideUpsert(existing ?? null, incoming)
-  const skipped = { ok: true, testimonial: incoming.external_id, stored: false, notified: false, reason: d.reason }
-  if (d.action === 'skip') return skipped
+    const d = decideUpsert(existing ?? null, incoming)
+    const skipped = { ok: true, testimonial: incoming.external_id, stored: false, notified: false, reason: d.reason }
+    if (d.action === 'skip') return skipped
 
-  let rowId = existing?.id
-  let error
-  if (d.erase) {
-    ;({ error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch()).eq('id', existing.id))
-  } else {
-    const fields = {
-      tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
-      rating: incoming.rating, body: incoming.body, author_name: incoming.author_name, author_role: incoming.author_role,
-      consent_publish: true, consent_at: incoming.consent_at, submitted_at: incoming.submitted_at,
-      status: 'pending', reviewed_by: null, reviewed_at: null,
-    }
-    if (d.action === 'insert') {
-      const r = await supabaseAdmin.from('testimonials').insert({ app_id: app.id, external_id: incoming.external_id, ...fields }).select('id').maybeSingle()
+    let rowId = existing?.id
+    let error
+    let lost = false
+    if (d.erase) {
+      const r = await supabaseAdmin.from('testimonials').update(withdrawnPatch(d.sourceUpdatedAt))
+        .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id')
       error = r.error
-      rowId = r.data?.id
-      // The ping and the sync can race on a brand-new row: the loser is a no-op.
-      if (error?.code === '23505') return { ...skipped, reason: 'ya registrado' }
+      lost = !error && (r.data?.length ?? 0) === 0
     } else {
-      ;({ error } = await supabaseAdmin.from('testimonials').update(fields).eq('id', existing.id))
+      const fields = {
+        tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
+        rating: incoming.rating, body: incoming.body, author_name: incoming.author_name, author_role: incoming.author_role,
+        consent_publish: true, consent_at: incoming.consent_at, submitted_at: incoming.submitted_at,
+        source_updated_at: incoming.source_updated_at,
+        status: 'pending', reviewed_by: null, reviewed_at: null,
+      }
+      if (d.action === 'insert') {
+        const r = await supabaseAdmin.from('testimonials').insert({ app_id: app.id, external_id: incoming.external_id, ...fields }).select('id').maybeSingle()
+        error = r.error
+        rowId = r.data?.id
+        if (error?.code === '23505') { error = null; lost = true } // the other writer got there first
+      } else {
+        const r = await supabaseAdmin.from('testimonials').update(fields)
+          .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id')
+        error = r.error
+        lost = !error && (r.data?.length ?? 0) === 0
+      }
     }
-  }
-  if (error) throw new Error(`testimonials ${d.action}: ${error.message}`)
+    if (error) throw new Error(`testimonials ${d.action}: ${error.message}`)
+    if (lost) continue // re-read and re-decide against what the winner wrote
 
-  let email = null
-  let notified = false
-  if (d.notify && rowId && await claimNotification(rowId)) {
-    notified = true
-    email = await notifyReviewers(app, { ...incoming, status: d.status })
+    let email = null
+    let notified = false
+    if (d.notify && rowId && await claimNotification(rowId)) {
+      notified = true
+      email = await notifyReviewers(app, { ...incoming, status: d.status })
+    }
+    await audit('ingest:testimonial', {
+      target_app: app.id, target_type: 'testimonial', target_id: incoming.external_id,
+      payload: { status: d.status, reason: d.reason, notified, email_sent: email?.sent.length ?? 0, email_failed: email?.failed.length ?? 0 },
+    })
+    return { ok: true, testimonial: incoming.external_id, stored: true, status: d.status, notified, reason: d.reason }
   }
-  await audit('ingest:testimonial', {
-    target_app: app.id, target_type: 'testimonial', target_id: incoming.external_id,
-    payload: { status: d.status, reason: d.reason, notified, email_sent: email?.sent.length ?? 0, email_failed: email?.failed.length ?? 0 },
-  })
-  return { ok: true, testimonial: incoming.external_id, stored: true, status: d.status, notified, reason: d.reason }
+  return lostRace(incoming.external_id)
 }
 
 // The id no longer exists in the app (get → record:null, or absent from a list
-// that answered fine): same treatment as a withdrawal.
-export async function processMissingTestimonial({ app, externalId }) {
-  const { data: existing, error: selErr } = await supabaseAdmin
-    .from('testimonials').select('id, status').eq('app_id', app.id).eq('external_id', String(externalId)).maybeSingle()
-  if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
-  const d = decideGone(existing ?? null)
-  if (d.action === 'skip') return { ok: true, testimonial: String(externalId), stored: false, notified: false, reason: d.reason }
-  const { error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch()).eq('id', existing.id)
-  if (error) throw new Error(`testimonials withdraw: ${error.message}`)
-  await audit('ingest:testimonial', {
-    target_app: app.id, target_type: 'testimonial', target_id: String(externalId),
-    payload: { status: 'withdrawn', reason: d.reason },
-  })
-  return { ok: true, testimonial: String(externalId), stored: true, status: 'withdrawn', notified: false, reason: d.reason }
+// that answered fine): same treatment as a withdrawal, but only for a row that
+// is not newer than the snapshot that revealed the absence (`snapshotStartedAt`:
+// when that get/list call STARTED).
+export async function processMissingTestimonial({ app, externalId, snapshotStartedAt = null }) {
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const { data: existing, error: selErr } = await supabaseAdmin
+      .from('testimonials').select('id, status, source_updated_at, updated_at').eq('app_id', app.id).eq('external_id', String(externalId)).maybeSingle()
+    if (selErr) throw new Error(`testimonials select: ${selErr.message}`)
+    const d = decideGone(existing ?? null, undefined, { snapshotStartedAt })
+    if (d.action === 'skip') return { ok: true, testimonial: String(externalId), stored: false, notified: false, reason: d.reason }
+    const { data, error } = await supabaseAdmin.from('testimonials').update(withdrawnPatch())
+      .eq('id', existing.id).eq('updated_at', existing.updated_at).select('id')
+    if (error) throw new Error(`testimonials withdraw: ${error.message}`)
+    if ((data?.length ?? 0) === 0) continue
+    await audit('ingest:testimonial', {
+      target_app: app.id, target_type: 'testimonial', target_id: String(externalId),
+      payload: { status: 'withdrawn', reason: d.reason },
+    })
+    return { ok: true, testimonial: String(externalId), stored: true, status: 'withdrawn', notified: false, reason: d.reason }
+  }
+  return lostRace(externalId)
 }
 
 export async function listStoredTestimonials(appId) {

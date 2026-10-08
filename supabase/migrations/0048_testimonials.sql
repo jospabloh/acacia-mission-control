@@ -26,7 +26,7 @@ create table if not exists public.testimonials (
                      check (status in ('pending','approved','rejected','withdrawn')),
   reviewed_by        text,
   reviewed_at        timestamptz,
-  withdrawn_at       timestamptz,   -- cuándo se borró el texto; un registro con consent_at anterior no lo restaura
+  source_updated_at  timestamptz,  -- `updated_date` del registro en la app: versión que se compara antes de todo upsert y borrado por ausencia
   notified_at        timestamptz,   -- último aviso al equipo; máx. uno por hora
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
@@ -38,6 +38,8 @@ create table if not exists public.testimonials (
 
 create index if not exists testimonials_status on public.testimonials (status, submitted_at desc);
 
+-- updated_at cambia en CADA update (trigger): es la versión de la fila para los
+-- UPDATE condicionales (compare-and-swap) de ingestTestimonial.js.
 drop trigger if exists trg_testimonials_touch on public.testimonials;
 create trigger trg_testimonials_touch before update on public.testimonials
   for each row execute function public.touch_updated_at();

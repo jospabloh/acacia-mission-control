@@ -1,4 +1,4 @@
-// Pure rules for the testimonials feature (contract v1.2, Module 29 of
+// Pure rules for the testimonials feature (contract v1.3, Module 29 of
 // acacia-app-standard). No imports, so `node --test` loads it without
 // Supabase or the bridge.
 
@@ -46,11 +46,13 @@ export function normalizeRecord(record, tenantName = null) {
   const roleOk = r.author_role == null || typeof r.author_role === 'string'
   const authorRole = typeof r.author_role === 'string' ? r.author_role.trim() : ''
   const consentAt = validDate(r.consent_at)
+  // The source's own last-write time (Base44 `updated_date`), the version every upsert compares.
+  const sourceUpdatedAt = validDate(r.updated_date)
   const idOk = (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim() !== ''
   const tenantId = typeof r.tenant_id === 'string' || typeof r.tenant_id === 'number' ? String(r.tenant_id).trim() : ''
   const name = tenantName ?? r.tenant_name
   const publishable =
-    idOk && r.status === 'submitted' && r.consent_publish === true && consentAt !== null &&
+    idOk && r.status === 'submitted' && r.consent_publish === true && consentAt !== null && sourceUpdatedAt !== null &&
     typeof r.rating === 'number' && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5 &&
     len(body) >= 20 && len(body) <= 600 &&
     len(authorName) >= 1 && len(authorName) <= 80 &&
@@ -65,6 +67,7 @@ export function normalizeRecord(record, tenantName = null) {
     author_role: publishable ? (authorRole || null) : null,
     consent_publish: publishable,
     consent_at: consentAt,
+    source_updated_at: sourceUpdatedAt,
     submitted_at: consentAt, // consent_at is renewed on every re-send
     publishable,
   }
@@ -78,29 +81,36 @@ export const contentChanged = (a, b) => CONTENT.some((k) => (a[k] ?? null) !== (
 export const WITHDRAWN_FIELDS = Object.freeze({
   status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false,
 })
-// The write for a withdrawal: the erase plus WHEN it happened (`withdrawn_at`),
-// which decideUpsert compares against a later record's consent_at.
-export const withdrawnPatch = (now = new Date()) => ({ ...WITHDRAWN_FIELDS, withdrawn_at: new Date(now).toISOString() })
+// The write for a withdrawal: the erase, plus the source version it was decided
+// on (when there is one: a record deleted in the app has none, and the stored
+// version stays).
+export const withdrawnPatch = (sourceUpdatedAt = null) =>
+  ({ ...WITHDRAWN_FIELDS, ...(sourceUpdatedAt ? { source_updated_at: sourceUpdatedAt } : {}) })
+
+// Source versions: the app record's `updated_date`, stored as
+// `source_updated_at`. Compared as instants; null/invalid = unknown.
+const ms = (v) => { const t = Date.parse(v ?? ''); return Number.isNaN(t) ? null : t }
 
 // Upsert decision table (contract §4). `existing` = bodega row or null.
 // Returns { action: 'skip'|'insert'|'update', status?, notify, reason }.
 // `notify` = a reviewer has something NEW to look at.
 export function decideUpsert(existing, incoming) {
   if (!incoming.external_id) return { action: 'skip', notify: false, reason: 'sin id' }
-  if (!incoming.publishable) return decideGone(existing, 'retirado o no publicable')
+  const have = ms(existing?.source_updated_at)
+  const seen = ms(incoming.source_updated_at)
+
+  if (!incoming.publishable) {
+    // An older snapshot never erases a newer resubmission. A withdrawn record
+    // with no readable version still erases: removing personal data is the safe side.
+    if (have !== null && seen !== null && seen < have) return { action: 'skip', notify: false, reason: 'versión anterior a la guardada' }
+    return { ...decideGone(existing, 'retirado o no publicable'), sourceUpdatedAt: incoming.source_updated_at }
+  }
 
   if (!existing) return { action: 'insert', status: 'pending', notify: true, reason: 'nuevo' }
-  if (existing.status === 'withdrawn') {
-    // Restore only a submission made AFTER the withdrawal. A record fetched just
-    // before the user withdrew (stale sync list, delayed ping) carries an older
-    // consent_at and must not bring the erased text back.
-    const since = Date.parse(existing.withdrawn_at ?? existing.updated_at ?? '')
-    const at = Date.parse(incoming.consent_at ?? '')
-    if (Number.isNaN(at) || (!Number.isNaN(since) && at <= since)) {
-      return { action: 'skip', notify: false, reason: 'registro anterior al retiro' }
-    }
-    return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
-  }
+  // Freshness applies before EVERY transition (including restoring a withdrawn
+  // row): a stale list or a delayed ping carries an older or equal version.
+  if (have !== null && seen <= have) return { action: 'skip', notify: false, reason: 'versión anterior o igual a la guardada' }
+  if (existing.status === 'withdrawn') return { action: 'update', status: 'pending', notify: true, reason: 'reenviado tras retirar' }
   if (!contentChanged(existing, incoming)) return { action: 'skip', notify: false, reason: 'sin cambios' }
   if (existing.status === 'approved' || existing.status === 'rejected') {
     return { action: 'update', status: 'pending', notify: true, reason: 'contenido cambiado' }
@@ -109,9 +119,15 @@ export function decideUpsert(existing, incoming) {
 }
 
 // Withdrawn / invalid / deleted-in-the-app: erase if there is a live row.
-export function decideGone(existing, reason = 'ya no existe en la app') {
+// `snapshotStartedAt`: when the list/get that revealed the absence STARTED. A
+// row whose source version is newer than that arrived after the snapshot, so
+// the snapshot cannot speak for it.
+export function decideGone(existing, reason = 'ya no existe en la app', { snapshotStartedAt = null } = {}) {
   if (!existing) return { action: 'skip', notify: false, reason: 'sin fila' }
   if (existing.status === 'withdrawn') return { action: 'skip', notify: false, reason: 'ya retirado' }
+  const have = ms(existing.source_updated_at)
+  const at = ms(snapshotStartedAt)
+  if (have !== null && at !== null && have > at) return { action: 'skip', notify: false, reason: 'más nueva que la lectura' }
   return { action: 'update', status: 'withdrawn', erase: true, notify: false, reason }
 }
 
@@ -188,7 +204,7 @@ export function buildPublicPayload(rows, { app = null, cap = 100 } = {}) {
   const when = (r) => Date.parse(r.reviewed_at ?? '') || 0
   const ok = rows
     .filter((r) => r.status === 'approved' && r.consent_publish === true && (!wanted || r.app_id === wanted))
-    .sort((a, b) => when(b) - when(a))
+    .sort((a, b) => when(b) - when(a) || String(b.id ?? '').localeCompare(String(a.id ?? '')))
   const sums = {}
   for (const r of ok) {
     const s = (sums[siteSlug(r.app_id)] ??= { count: 0, total: 0 })
@@ -197,4 +213,16 @@ export function buildPublicPayload(rows, { app = null, cap = 100 } = {}) {
   }
   const summary = Object.fromEntries(Object.entries(sums).map(([k, s]) => [k, { count: s.count, average: Math.round((s.total / s.count) * 10) / 10 }]))
   return { ok: true, items: ok.slice(0, cap).map(publicItem), summary }
+}
+
+// Reads EVERY row through a capped API (PostgREST returns at most 1000 per
+// request): fetchPage(from, to) → rows, in a stable order. Stops on a short page.
+export async function fetchAllPages(fetchPage, pageSize = 1000, maxPages = 50) {
+  const all = []
+  for (let i = 0; i < maxPages; i++) {
+    const rows = await fetchPage(i * pageSize, (i + 1) * pageSize - 1)
+    all.push(...rows)
+    if (rows.length < pageSize) return all
+  }
+  throw new Error('testimonials: demasiadas páginas')
 }
