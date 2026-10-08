@@ -4,9 +4,10 @@
 // signed acaciaControl bridge (`testimonials.get`), so a forged ping can't
 // publish anything. CORS-open, no secret, because it's a browser target.
 //
-// The response discloses nothing: `{ ok: true }` / 200 for every well-formed
-// request, whatever happened (unknown app, unknown id, app without the module,
-// bridge down). 400 only for a malformed body. The outcome goes to the log.
+// The response discloses nothing about the id: `{ ok: true }` / 200 for every
+// well-formed request about an unknown app/id or an app without the module;
+// 503 `{ ok: false }` only for a transient failure of ours (so the sender can
+// retry); 400 for a malformed body. The outcome goes to the log.
 import { supabaseAdmin } from '../supabaseAdmin.js'
 import { callBridge, bridgeConfigured } from '../appBridge.js'
 import { processIncomingTestimonial, processMissingTestimonial } from '../ingestTestimonial.js'
@@ -35,8 +36,13 @@ export async function runPing(body, deps = {}) {
     return { status: 400, json: { error: 'falta app/testimonialId' }, outcome: 'malformed' }
   }
   const done = (outcome) => { d.log(`app=${appId} id=${testimonialId} ${outcome}`); return { status: 200, json: { ok: true }, outcome } }
+  // A TRANSIENT failure on our side (bridge down or bad answer, DB error, bridge
+  // not configured) answers 503 `{ok:false}` so the app's server-side sender
+  // retries; it names no id and no detail. Everything about the request itself
+  // (unknown app/id, app without the module) stays 200 {ok:true}.
+  const retry = (outcome) => { d.log(`app=${appId} id=${testimonialId} ${outcome}`); return { status: 503, json: { ok: false }, outcome } }
   try {
-    if (!d.bridgeConfigured()) return done('bridge no configurado')
+    if (!d.bridgeConfigured()) return retry('bridge no configurado')
     const app = await d.getApp(appId)
     if (!app || app.backend !== 'base44') return done('app desconocida')
 
@@ -45,16 +51,16 @@ export async function runPing(body, deps = {}) {
     try {
       out = await d.callBridge(app, 'testimonials.get', { id: String(testimonialId) })
     } catch (e) {
-      return done(isUnknownAction(e) ? 'app sin módulo' : `bridge: ${e.message}`)
+      return isUnknownAction(e) ? done('app sin módulo') : retry(`bridge: ${e.message}`)
     }
     const res = out?.data ?? out
-    if (res?.ok !== true || res.record === undefined) return done('respuesta del puente inválida')
+    if (res?.ok !== true || res.record === undefined) return retry('respuesta del puente inválida')
     if (res.record === null) return done(`ausente en la app: ${(await d.processMissing({ app, externalId: testimonialId, observedAt: startedAt })).reason}`)
 
-    const r = await d.processIncoming({ app, record: res.record, tenantName: res.tenant_name ?? null, observedAt: startedAt })
+    const r = await d.processIncoming({ app, record: res.record, observedAt: startedAt })
     return done(`${r.reason}${r.notified ? ' (avisado)' : ''}`)
   } catch (e) {
-    return done(`error: ${e.message}`)
+    return retry(`error: ${e.message}`)
   }
 }
 

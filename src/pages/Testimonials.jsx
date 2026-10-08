@@ -23,7 +23,17 @@ function Stars({ n }) {
 }
 
 const PAGE = 50
-const COLS = 'id, app_id, tenant_name, rating, body, author_name, author_role, status, submitted_at, reviewed_at, reviewed_by, updated_at, apps(name)'
+const COLS = 'id, app_id, tenant_external_id, rating, body, author_name, author_role, status, submitted_at, reviewed_at, reviewed_by, updated_at, apps(name)'
+
+// The business name is not stored on the testimonial (it would go stale and is
+// personal data that a withdrawal would have to chase): resolve it at display
+// time from `tenants`, which the tenant sync keeps current.
+async function resolveNames(rows) {
+  const ids = [...new Set(rows.map((r) => r.tenant_external_id).filter(Boolean))]
+  if (!ids.length) return {}
+  const { data } = await supabase.from('tenants').select('app_id, external_id, name').in('external_id', ids)
+  return Object.fromEntries((data ?? []).filter((t) => t.name).map((t) => [`${t.app_id}|${t.external_id}`, t.name]))
+}
 
 export function Testimonials() {
   const { toasts, ok, fail, dismiss } = useToasts()
@@ -35,6 +45,9 @@ export function Testimonials() {
   // Only the latest request may write state: switching tabs mid-load, or a
   // reload after a review, must not let an older response resolve last and win.
   const reqId = useRef(0)
+  const moreGen = useRef(0) // generation of the in-flight "Cargar más"; a double click or a reload invalidates it
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [names, setNames] = useState({}) // `${app_id}|${tenant_external_id}` → business name, resolved from `tenants`
   const tabRef = useRef('pending') // the tab on screen NOW (decide() may finish after a tab switch)
 
   // One query per tab (status filter in the DB, never a client-side filter over
@@ -50,6 +63,11 @@ export function Testimonials() {
     ])
     if (mine !== reqId.current) return
     if (list.error || cs.some((c) => c.error)) { console.error((list.error ?? cs.find((c) => c.error).error).message); fail('No se pudieron cargar los testimonios.') }
+    const found = await resolveNames(list.data ?? [])
+    if (mine !== reqId.current) return
+    moreGen.current += 1 // any "Cargar más" started before this reload is stale
+    setLoadingMore(false)
+    setNames((n) => ({ ...n, ...found }))
     setRows(list.data ?? [])
     setMore((list.data?.length ?? 0) === upTo)
     setCounts(Object.fromEntries(TABS.map((t, i) => [t.value, cs[i].count ?? 0])))
@@ -57,13 +75,21 @@ export function Testimonials() {
   useEffect(() => { tabRef.current = tab; setRows(null); load(tab) }, [load, tab])
 
   async function loadMore() {
+    if (loadingMore || !rows) return
     const mine = reqId.current
+    const gen = ++moreGen.current
+    setLoadingMore(true)
     const from = rows.length
     const { data, error } = await supabase.from('testimonials').select(COLS).eq('status', tab)
       .order('submitted_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).range(from, from + PAGE - 1)
-    if (mine !== reqId.current) return // another load started meanwhile; its result wins
+    if (mine !== reqId.current || gen !== moreGen.current) return // another load started meanwhile; its result wins
+    setLoadingMore(false)
     if (error) { console.error(error.message); fail('No se pudieron cargar más testimonios.'); return }
-    setRows((r) => [...r, ...(data ?? [])])
+    const found = await resolveNames(data ?? [])
+    if (mine !== reqId.current || gen !== moreGen.current) return
+    setNames((n) => ({ ...n, ...found }))
+    // Dedupe by id: belt and braces against a page that overlaps the previous one.
+    setRows((r) => { const seen = new Set(r.map((x) => x.id)); return [...r, ...(data ?? []).filter((x) => !seen.has(x.id))] })
     setMore((data?.length ?? 0) === PAGE)
   }
   const shown = rows ?? []
@@ -96,7 +122,7 @@ export function Testimonials() {
           <article key={r.id} className="rounded-xl border border-hair bg-paper-card p-5">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Badge tone="info">{r.apps?.name ?? r.app_id}</Badge>
-              <span className="text-ink-soft">{r.tenant_name ?? 'Sin nombre de negocio'}</span>
+              <span className="text-ink-soft">{names[`${r.app_id}|${r.tenant_external_id}`] ?? 'Sin nombre de negocio'}</span>
               <Stars n={r.rating} />
             </div>
             <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{r.body}</p>
@@ -119,7 +145,7 @@ export function Testimonials() {
             </div>
           </article>
         ))}
-        {more && rows !== null && <div className="text-center"><Button variant="secondary" size="sm" onClick={loadMore}>Cargar más</Button></div>}
+        {more && rows !== null && <div className="text-center"><Button variant="secondary" size="sm" disabled={loadingMore} onClick={loadMore}>Cargar más</Button></div>}
       </div>
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>

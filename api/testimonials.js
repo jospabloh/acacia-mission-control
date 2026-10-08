@@ -1,6 +1,6 @@
 // PUBLIC testimonials feed for acaciaco.com.mx (contract §6). No auth, CORS *,
-// cached at the edge for at most 60 s (max-age=0 for browsers; no stale-while-revalidate: a withdrawn
-// testimonial must stop being served within that bound). Reads with the service role, but ONLY approved+consented
+// not cached anywhere (a withdrawal must stop being served immediately). Reads with the
+// service role, but ONLY approved+consented
 // rows and ONLY through buildPublicPayload()'s allowlist — nothing else in the
 // row (tenant, e-mail, ids) can reach the response.
 import { supabaseAdmin, requireSupabase } from './_lib/supabaseAdmin.js'
@@ -33,7 +33,10 @@ export default async function handler(req, res) {
   } catch {
     return res.status(500).json({ ok: false, error: 'no disponible' })
   }
-  // max-age=0: browsers revalidate too (s-maxage alone leaves heuristic freshness to them).
-  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate, s-maxage=60')
+  // Vercel's documented "do not cache" value: neither the CDN nor the browser keeps
+  // a copy. A withdrawn testimonial is gone from the next request. (With s-maxage
+  // Vercel serves the stale copy until an async revalidation lands, so a bound
+  // could not be promised.)
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate')
   return res.status(200).json(buildPublicPayload(data, { app }))
 }

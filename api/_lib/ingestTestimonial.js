@@ -73,11 +73,12 @@ const ATTEMPTS = 2
 const lostRace = (id, reason = 'conflicto de escritura, se reintenta en el próximo sync') =>
   ({ ok: true, testimonial: String(id), stored: false, notified: false, reason })
 
-// record: the app's Testimonial entity; tenantName: from the bridge answer.
+// record: the app's Testimonial entity. The business name is NOT stored (the
+// review page resolves it from `tenants` at display time).
 // Returns { ok, testimonial, stored, status?, notified, reason }. Throws only on
 // a hard DB error.
-export async function processIncomingTestimonial({ app, record, tenantName = null, observedAt = new Date().toISOString() }) {
-  const incoming = normalizeRecord(record, tenantName)
+export async function processIncomingTestimonial({ app, record, observedAt = new Date().toISOString() }) {
+  const incoming = normalizeRecord(record)
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const { data: existing, error: selErr } = await supabaseAdmin
       .from('testimonials').select('*').eq('app_id', app.id).eq('external_id', incoming.external_id).maybeSingle()
@@ -95,7 +96,7 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
       const patch = d.erase ? withdrawnPatch(d.sourceUpdatedAt, observedAt)
         : d.refresh ? {
           observed_at: observedAt, source_updated_at: incoming.source_updated_at, consent_at: incoming.consent_at,
-          submitted_at: incoming.submitted_at, tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
+          submitted_at: incoming.submitted_at, tenant_external_id: incoming.tenant_external_id,
         }
           : { observed_at: observedAt }
       const r = await supabaseAdmin.from('testimonials').update(patch)
@@ -104,7 +105,7 @@ export async function processIncomingTestimonial({ app, record, tenantName = nul
       lost = !error && (r.data?.length ?? 0) === 0
     } else {
       const fields = {
-        tenant_external_id: incoming.tenant_external_id, tenant_name: incoming.tenant_name,
+        tenant_external_id: incoming.tenant_external_id,
         rating: incoming.rating, body: incoming.body, author_name: incoming.author_name, author_role: incoming.author_role,
         consent_publish: true, consent_at: incoming.consent_at, submitted_at: incoming.submitted_at,
         source_updated_at: incoming.source_updated_at, observed_at: observedAt,

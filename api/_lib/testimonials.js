@@ -1,4 +1,4 @@
-// Pure rules for the testimonials feature (contract v1.6, Module 29 of
+// Pure rules for the testimonials feature (contract v1.7, Module 29 of
 // acacia-app-standard). No imports, so `node --test` loads it without
 // Supabase or the bridge.
 
@@ -39,7 +39,7 @@ const validDate = (v) => {
 // that is not clearly a valid, consented, submitted testimonial is NOT
 // publishable; that includes unknown `status` values. Dates are normalised to
 // ISO or null, so nothing unparseable can reach Postgres.
-export function normalizeRecord(record, tenantName = null) {
+export function normalizeRecord(record) {
   const r = record ?? {}
   const body = typeof r.body === 'string' ? r.body.trim() : ''
   const authorName = typeof r.author_name === 'string' ? r.author_name.trim() : ''
@@ -50,7 +50,6 @@ export function normalizeRecord(record, tenantName = null) {
   const sourceUpdatedAt = validDate(r.updated_date)
   const idOk = (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim() !== ''
   const tenantId = typeof r.tenant_id === 'string' || typeof r.tenant_id === 'number' ? String(r.tenant_id).trim() : ''
-  const name = tenantName ?? r.tenant_name
   const publishable =
     idOk && r.status === 'submitted' && r.consent_publish === true && consentAt !== null && sourceUpdatedAt !== null &&
     typeof r.rating === 'number' && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5 &&
@@ -60,7 +59,6 @@ export function normalizeRecord(record, tenantName = null) {
   return {
     external_id: idOk ? String(r.id).trim() : '',
     tenant_external_id: tenantId || null,
-    tenant_name: typeof name === 'string' && name.trim() ? name.trim() : null,
     rating: publishable ? r.rating : null,
     body: publishable ? body : '',
     author_name: publishable ? authorName : '',
@@ -79,7 +77,7 @@ export const contentChanged = (a, b) => CONTENT.some((k) => (a[k] ?? null) !== (
 // What "withdrawn" does to a bodega row: personal data is erased (Module 28),
 // rating and tenant stay. Used for withdrawn, invalid, no-consent AND deleted.
 export const WITHDRAWN_FIELDS = Object.freeze({
-  status: 'withdrawn', body: '', author_name: '', author_role: null, tenant_name: null, consent_publish: false,
+  status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false,
 })
 // The write for a withdrawal: the erase, plus `observed_at` (when the observation
 // that caused it started) and the source version if the record carried one (a

@@ -11,7 +11,6 @@ create table if not exists public.testimonials (
   app_id             text not null references public.apps(id) on delete cascade,
   external_id        text not null,
   tenant_external_id text,
-  tenant_name        text,
   rating             smallint not null check (rating between 1 and 5),
   -- Retirar BORRA el texto (Módulo 28): body/author_name quedan '' y
   -- consent_publish false, pero solo en una fila `withdrawn`. Cualquier otra

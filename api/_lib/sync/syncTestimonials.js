@@ -38,7 +38,7 @@ export async function syncTestimonialsForApp(app, deps = {}) {
     try { return await fn() } catch (e) { firstError ??= e.message; return null }
   }
   for (const record of body.records) {
-    const r = await attempt(() => process({ app, record, tenantName: record?.tenant_name ?? null, observedAt }))
+    const r = await attempt(() => process({ app, record, observedAt }))
     if (r?.stored) stored += 1
   }
   const rows = await attempt(() => listStored(app.id))

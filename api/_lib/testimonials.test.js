@@ -13,16 +13,16 @@ const rec = (o = {}) => ({
   author_name: 'Ana', author_role: 'Dueña', consent_publish: true, consent_at: '2026-10-01T10:00:00Z', updated_date: '2026-10-01T10:00:00Z',
   status: 'submitted', ...o,
 })
-const inc = (o) => normalizeRecord(rec(o), 'Café Ana')
+const inc = (o) => normalizeRecord(rec(o))
 const stored = (status, o = {}) => ({ id: 'u1', status, ...inc(), ...o })
 
 // ── normalizeRecord: fail-closed ────────────────────────────────────────────
 test('normalizeRecord: valid record is publishable and trimmed', () => {
-  const n = normalizeRecord(rec({ body: '  Excelente herramienta para mi negocio.  ' }), 'Café Ana')
+  const n = normalizeRecord(rec({ body: '  Excelente herramienta para mi negocio.  ' }))
   assert.equal(n.publishable, true)
   assert.equal(n.external_id, 'tm123456')
   assert.equal(n.tenant_external_id, 't9')
-  assert.equal(n.tenant_name, 'Café Ana')
+  assert.equal('tenant_name' in n, false) // the business name is never copied onto the testimonial
   assert.equal(n.body, 'Excelente herramienta para mi negocio.')
   assert.equal(n.consent_at, '2026-10-01T10:00:00.000Z')
 })
@@ -162,9 +162,9 @@ test('withdrawnPatch stamps observed_at', () => {
 })
 test('alert e-mail is non-personal: no name, role, text or business name', async () => {
   const { renderTestimonialAlert } = await import('./testimonialAlert.js')
-  const a = renderTestimonialAlert({ appName: 'Rumbo', tenantName: 'Café Ana', rating: 5, body: 'TEXTO-SECRETO', authorName: 'NOMBRE-SECRETO', authorRole: 'ROL-SECRETO', link: 'https://x.mx/testimonials' })
+  const a = renderTestimonialAlert({ appName: 'Rumbo', rating: 5, body: 'TEXTO-SECRETO', authorName: 'NOMBRE-SECRETO', authorRole: 'ROL-SECRETO', link: 'https://x.mx/testimonials' })
   for (const t of ['TEXTO-SECRETO', 'NOMBRE-SECRETO', 'ROL-SECRETO']) assert.ok(!a.html.includes(t) && !a.subject.includes(t), t)
-  assert.ok(!a.html.includes('Café Ana') && !a.subject.includes('Café Ana'), 'no business name either')
+  for (const t of ['Café Ana']) assert.ok(!a.html.includes(t) && !a.subject.includes(t), 'no business name either')
 })
 test('fetchAllPages reads past the 1000-row cap and stops on a short page', async () => {
   const calls = []
@@ -212,7 +212,7 @@ test('upsert: not publishable with a live row → withdrawn AND erase; with with
   assert.equal(decideUpsert(stored('withdrawn'), inc({ status: 'withdrawn' })).action, 'skip')
 })
 test('erase fields wipe the personal text and consent, nothing else', () => {
-  assert.deepEqual({ ...WITHDRAWN_FIELDS }, { status: 'withdrawn', body: '', author_name: '', author_role: null, tenant_name: null, consent_publish: false })
+  assert.deepEqual({ ...WITHDRAWN_FIELDS }, { status: 'withdrawn', body: '', author_name: '', author_role: null, consent_publish: false })
   assert.ok(Object.isFrozen(WITHDRAWN_FIELDS))
 })
 
@@ -377,11 +377,11 @@ test('sync feeds every record to the shared upsert and withdraws rows missing fr
   const gone = []
   const r = await syncTestimonialsForApp(app, {
     call: async () => ({ ok: true, records: [{ id: 'a', tenant_name: 'N1' }, { id: 'b' }] }),
-    process: async ({ record, tenantName }) => { seen.push([record.id, tenantName]); return { stored: record.id === 'a' } },
+    process: async ({ record }) => { seen.push([record.id]); return { stored: record.id === 'a' } },
     listStored: async () => [{ external_id: 'a', status: 'approved' }, { external_id: 'z', status: 'pending' }, { external_id: 'w', status: 'withdrawn' }],
     processMissing: async ({ externalId }) => { gone.push(externalId); return { stored: true } },
   })
-  assert.deepEqual(seen, [['a', 'N1'], ['b', null]])
+  assert.deepEqual(seen, [['a'], ['b']])
   assert.deepEqual(gone, ['z'])
   assert.deepEqual(r, { app: 'rumbo', testimonials: 2, stored: 2 })
 })
@@ -410,18 +410,14 @@ test('ping: malformed input → 400 only', async () => {
     assert.equal((await runPing(b, pingDeps())).status, 400, JSON.stringify(b))
   }
 })
-test('ping: every outcome of a well-formed request answers 200 {ok:true} and nothing else', async () => {
+test('ping: a request about an unknown app/id or an app without the module answers 200 {ok:true}', async () => {
   const body = { app: 'rumbo', testimonialId: 'tm123456' }
   const cases = {
     stored: pingDeps(),
     'unknown app': pingDeps({ getApp: async () => null }),
     'non-base44 app': pingDeps({ getApp: async () => ({ id: 'site', backend: 'static' }) }),
     'app without module': pingDeps({ callBridge: async () => { throw new Error('unknown action: testimonials.get') } }),
-    'bridge down': pingDeps({ callBridge: async () => { throw new Error('boom') } }),
     'record null': pingDeps({ callBridge: async () => ({ ok: true, record: null }) }),
-    'bad bridge answer': pingDeps({ callBridge: async () => ({ ok: true }) }),
-    'db error': pingDeps({ processIncoming: async () => { throw new Error('db secret detail') } }),
-    'bridge not configured': pingDeps({ bridgeConfigured: () => false }),
   }
   for (const [name, deps] of Object.entries(cases)) {
     const r = await runPing(body, deps)
@@ -429,16 +425,30 @@ test('ping: every outcome of a well-formed request answers 200 {ok:true} and not
     assert.deepEqual(r.json, { ok: true }, name)
   }
 })
-test('ping: record:null withdraws the stored row; a record goes to the upsert with the tenant name', async () => {
+test('ping: a TRANSIENT failure of ours answers 503 {ok:false} (sender retries), with no detail', async () => {
+  const body = { app: 'rumbo', testimonialId: 'tm123456' }
+  const cases = {
+    'bridge down': pingDeps({ callBridge: async () => { throw new Error('boom') } }),
+    'bad bridge answer': pingDeps({ callBridge: async () => ({ ok: true }) }),
+    'db error': pingDeps({ processIncoming: async () => { throw new Error('db secret detail') } }),
+    'bridge not configured': pingDeps({ bridgeConfigured: () => false }),
+  }
+  for (const [name, deps] of Object.entries(cases)) {
+    const r = await runPing(body, deps)
+    assert.equal(r.status, 503, name)
+    assert.deepEqual(r.json, { ok: false }, name)
+  }
+})
+test('ping: record:null withdraws the stored row; a record goes to the upsert', async () => {
   const calls = []
   await runPing({ app: 'rumbo', testimonialId: 'tm123456' }, pingDeps({
     callBridge: async () => ({ ok: true, record: null }),
     processMissing: async (a) => { calls.push(['missing', a.externalId]); return { reason: 'ok' } },
   }))
   await runPing({ app: 'rumbo', testimonialId: 'tm123456' }, pingDeps({
-    processIncoming: async (a) => { calls.push(['incoming', a.tenantName]); return { reason: 'ok' } },
+    processIncoming: async (a) => { calls.push(['incoming', a.record.id]); return { reason: 'ok' } },
   }))
-  assert.deepEqual(calls, [['missing', 'tm123456'], ['incoming', 'Café Ana']])
+  assert.deepEqual(calls, [['missing', 'tm123456'], ['incoming', 'tm123456']])
 })
 
 test('sync stamps every upsert and every absence with the SAME observed_at (the list call start)', async () => {
@@ -474,8 +484,4 @@ test('MC2: an erased row is restored by a LATER observation with an EQUAL versio
   assert.equal(decideUpsert(erasedRow, inc({ updated_date: V1 }), T1).action, 'skip')
   const stale = decideUpsert({ ...erasedRow, source_updated_at: V2 }, inc({ updated_date: V1 }), T3)
   assert.deepEqual([stale.action, stale.touch, stale.status], ['update', true, 'withdrawn'])
-})
-test('withdrawal clears tenant_name too (a business name can identify a person)', () => {
-  assert.equal(WITHDRAWN_FIELDS.tenant_name, null)
-  assert.equal(withdrawnPatch(V1, T1).tenant_name, null)
 })

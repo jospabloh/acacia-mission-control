@@ -1,5 +1,5 @@
 // Internal "nuevo testimonio por revisar" e-mail, same audience and shape as the
-// new-ticket alert (ticketAlert.js). ctx: { appName, tenantName, rating,
+// new-ticket alert (ticketAlert.js). ctx: { appName, rating,
 // link }. NON-PERSONAL on purpose: no name, role, text or business name (a
 // business name can identify a natural person). The reviewer reads those
 // in Mission Control (login, erased on withdrawal); a mail copy would outlive a
