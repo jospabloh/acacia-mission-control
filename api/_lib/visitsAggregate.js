@@ -34,6 +34,8 @@ export function previousMonth(ymd) {
 }
 
 // Highest visitsMonth; ties go to the earliest slug in `order`; null when all 0.
+// `order` must be deterministic: APP_SLUGS is a constant, freeware slugs are
+// sorted below because the registry query that yields them has no ORDER BY.
 function top(order, buckets) {
   let best = null
   let bestN = 0
@@ -78,6 +80,6 @@ export function aggregateVisits({ rows, appSlugs, freewareSlugs, now = new Date(
     visits,
     freeware,
     topApp: top(appSlugs, visits),
-    topFreeware: top(freewareSlugs, freeware),
+    topFreeware: top([...freewareSlugs].sort(), freeware),
   }
 }

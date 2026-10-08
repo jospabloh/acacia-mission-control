@@ -61,11 +61,13 @@ test('topApp: highest wins; ties go to the first in APP_SLUGS order', () => {
   assert.equal(run([...rows, ...pv('/apps/sommel', '2026-09-11')], '2026-10-07').topApp, 'sommel')
 })
 
-test('topFreeware likewise, independent of apps', () => {
+test('topFreeware: ties go to the alphabetically first slug, whatever order the registry returned', () => {
   const rows = [...pv('/freeware/gastos-viaje', '2026-09-10', 2), ...pv('/freeware/plink-fx', '2026-09-10', 2)]
   const r = run(rows, '2026-10-07')
-  assert.equal(r.topFreeware, 'plink-fx')
+  assert.equal(r.topFreeware, 'gastos-viaje')
   assert.equal(r.topApp, null)
+  // Same data, registry order reversed: the winner must not flip.
+  assert.equal(run(rows, '2026-10-07', { freewareSlugs: [...FREE].reverse() }).topFreeware, 'gastos-viaje')
 })
 
 test('all zero -> null, even with current-month traffic only', () => {
