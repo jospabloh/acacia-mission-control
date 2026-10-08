@@ -483,3 +483,62 @@ otra cosa que necesite una cadena aleatoria estable se trae la suya.
 **Cómo se supo que el aviso de alta ya funcionaba:** en `alerts`, las altas de StockFlow
 del 30-sep y 1-oct aparecen con `via: ping` y el correo enviado; la de Cesar (29-sep)
 llegó con `via: sync` y sin registro de correo — el ping se había perdido.
+
+## Testimonios: la app los guarda, MC los revisa, la web publica los aprobados (2026-10-07)
+
+Contrato: **Módulo 29 de `jospabloh/acacia-app-standard`** (v1.7). Si el código y el módulo difieren, se
+corrigen los dos en el mismo cambio.
+
+- **Tabla `testimonials`** (migración `0048`): `status` propio de MC (`pending | approved | rejected |
+  withdrawn`), único `(app_id, external_id)`, `notified_at`, CHECKs de longitud (solo se relajan en una fila
+  `withdrawn`, cuyo texto está borrado), RLS viewer lee / admin escribe.
+- **Formas EXACTAS del puente** (cada app): `testimonials.get {id}` → `{ok:true, record}` (`tenant_name` opcional, MC lo ignora) o
+  `{ok:true, record:null}`; `testimonials.list {}` → `{ok:true, records:[{…}]}`, SIEMPRE la lista
+  completa (incluye `withdrawn`). El id de tenant llega solo como `tenant_id`. Acción no implementada:
+  `unknown action: <acción>`. Una respuesta sin `ok:true` o sin `records` array es un error y NO borra nada.
+- **Ping** `POST /api/ingest/testimonial-pull {app, testimonialId}` (sin secreto): responde `{ok:true}` 200
+  a toda petición bien formada sobre app/id desconocidos o app sin módulo; 503 `{ok:false}` ante un fallo
+  transitorio propio (puente, BD, config) para que el emisor del servidor de la app reintente (hasta 3 intentos);
+  400 solo por forma inválida. Detalle al log.
+  **Respaldo**: el sync diario llama `testimonials.list` (`sync/syncTestimonials.js`). `unknown action` se
+  omite en silencio; cualquier otro fallo es un `error` de esa sección (no aborta el resto del sync).
+- **Validación fail-closed** (`normalizeRecord`, `api/_lib/testimonials.js`): publicable solo con
+  `status === 'submitted'`, `consent_publish === true`, `updated_date` (versión de origen, ISO estricto) y `consent_at` ISO-8601 estricto con día de calendario real (`2026-02-30` se rechaza), `rating` number entero
+  1–5, `body` 20–600, `author_name` 1–80, `author_role` ≤ 80. Todo lo demás cuenta como retirado.
+- **Retirar BORRA el dato personal.** Retirado, inválido, sin consentimiento, `record:null` en el ping, o
+  fila ausente de una `list` que respondió bien → `withdrawn` con `body = ''`, `author_name = ''`,
+  `author_role = null`, `consent_publish = false` y, si el registro la trae, `source_updated_at` (`withdrawnPatch()`). Las apps
+  también vacían esos campos al retirar, así que un registro `withdrawn` con texto vacío es normal. **Orden: `observed_at` manda.** Toda
+  escritura guarda `observed_at` = reloj de MC cuando EMPEZÓ la llamada al puente (list en el sync, get en el
+  ping); una observación (upsert, `record:null`, ausencia de la lista) solo se aplica si es estrictamente
+  posterior a la de la fila, y los borrados la sellan (una fila ya retirada solo la avanza), así que una
+  lectura vieja no revive texto aunque traiga `updated_date` más nuevo. `updated_date` (`source_updated_at`) es
+  guarda secundaria: solo rechaza un registro que no es más nuevo que lo guardado. Una observación nueva que no cambia nada
+  avanza `observed_at` (touch, compare-and-swap; con versión más nueva guarda también `source_updated_at` y metadatos) y una fila borrada por `record:null`/ausencia se restaura con una
+  observación posterior de versión igual o mayor. La ausencia lee TODAS las filas guardadas (paginado). Un
+  `submitted` sin `updated_date` válido no es publicable. Todos los UPDATE son compare-and-swap sobre `updated_at` (trigger; siempre el string leído de la BD, nunca ms parseados; el 409 de revisión compara el string crudo) y
+  reintentan una vez; un 23505 en el insert es la misma carrera. Se conservan `rating`, tenant y fechas.
+- **Upsert**: nuevo → `pending` (avisa); `pending` + cambio → `pending` (sin aviso); `approved`/`rejected`
+  + cambio → `pending` (avisa); `withdrawn` + reenvío con versión posterior → `pending` (avisa); sin cambios → nada.
+- **Aviso** NO personal (sin nombre, rol, texto ni nombre del negocio (MC no lo guarda: la página lo resuelve al mostrar desde `tenants`), ni en `alerts` ni en el correo: retirar solo borra `testimonials`) (`alerts.kind = 'testimonial'` + correo a `SUPPORT_ALERT_EMAILS`, enviado por el puente de la
+  propia app como los tickets): máximo uno por hora por testimonio. `notified_at` se reclama con un solo
+  UPDATE condicional que además exige `status='pending'` y la misma `source_updated_at` que escribió quien notifica (no `updated_at`: un touch no la invalida; relee y reintenta una vez; si hubo retiro o contenido nuevo, no se avisa), así que un ping y el sync a la vez no lo duplican.
+- **Revisión**: `POST /api/control/testimonial-review {id, op, updatedAt}` (`approve | reject | unpublish`,
+  admin+, por `audit()`). `updatedAt` es el de la fila que el revisor vio; si cambió → 409 y la página
+  recarga. El UPDATE además va guardado por `status` y `updated_at`. `withdrawn` no se revisa. La página consulta por pestaña (filtro de estado en la BD, orden `submitted_at` desc + id, "Cargar más" de 50, deshabilitado en vuelo, con generación propia y dedupe por id; una respuesta vieja nunca pisa a la última petición) y los conteos salen de consultas `head`, así que siguen bien pasado el tope de filas de la API.
+- **Público**: `GET /api/testimonials[?app=<slug del sitio>]`. Solo `approved` con consentimiento, por la
+  lista blanca `publicItem()`; `puntos` sale como `puntos-plus`. `month` = mes de la aprobación en
+  America/Mexico_City. Consulta paginada (todas las aprobadas, filtro `app` y orden en BD). `Cache-Control: public, max-age=0, must-revalidate` (sin caché: con `s-maxage` Vercel sirve copia vieja hasta una revalidación asíncrona): es el plazo en que un retiro deja de servirse.
+- **Funciones en `api/`: 11 de 12** (`functionBudget.test.js` lo vigila).
+
+**No verificado** (sin Supabase ni puente en el sandbox): la migración contra la base viva; los
+`insert/update/select` reales y el reclamo atómico de `notified_at` (solo la lógica pura está probada); la
+comparación `updated_at` entre lo que devuelve PostgREST y lo que reenvía el navegador (se compara por
+instante, pero el `.eq('updated_at', …)` del UPDATE usa el texto tal cual lo leyó el servidor); el envío del
+correo; que ninguna app implementa aún `testimonials.get/list`; el endpoint público con datos reales; la
+página en navegador (solo `build` y `lint`).
+
+**Pasos manuales del dueño**: aplicar `0048_testimonials.sql`. No hay variable de entorno nueva
+(`SUPPORT_ALERT_EMAILS`, `MC_PUBLIC_URL` e `INGEST_HMAC_SECRET` ya existen). Hasta que una app implemente
+el módulo, el sync responde `skipped` y la página queda vacía. Cada app sin el módulo deja una línea
+`callBridge failed … unknown action` en el log del sync diario; es esperada.

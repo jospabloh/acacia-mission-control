@@ -8,6 +8,7 @@ import { bridgeConfigured } from '../_lib/appBridge.js'
 import { syncLicensesForApp } from '../_lib/sync/syncLicenses.js'
 import { syncUsageForApp } from '../_lib/sync/syncUsage.js'
 import { syncTicketsForApp } from '../_lib/sync/syncTickets.js'
+import { syncTestimonialsForApp } from '../_lib/sync/syncTestimonials.js'
 import { syncSessionsForApp } from '../_lib/sync/syncSessions.js'
 import { sweepAutoCloseForApp } from '../_lib/sweepResolvedTickets.js'
 import { probeAppHealth } from '../_lib/sync/syncHealth.js'
@@ -33,6 +34,8 @@ export default async function handler(req, res) {
       try { row.licenses = await syncLicensesForApp(app) } catch (e) { row.licenses = { error: e.message } }
       try { row.usage = await syncUsageForApp(app, day) } catch (e) { row.usage = { error: e.message } }
       try { row.tickets = await syncTicketsForApp(app) } catch (e) { row.tickets = { error: e.message } }
+      // Net for testimonial pings that never arrived; apps without the module skip.
+      try { row.testimonials = await syncTestimonialsForApp(app) } catch (e) { row.testimonials = { error: e.message } }
       try { row.sessions = await syncSessionsForApp(app) } catch (e) { row.sessions = { error: e.message } }
       // After the sync reflects each app's latest state, close tickets that have
       // sat "resolved" past the grace window with no further requester activity.
