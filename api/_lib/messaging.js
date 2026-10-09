@@ -57,6 +57,16 @@ export const APP_MSG = {
     name: 'ArtisKids', entity: 'Family', value: 'los dibujos de sus hijos guardados para siempre',
     recipient: { related: { entity: 'User', keyField: 'family_id', keyFromRecord: 'id', emailField: 'email', roleField: 'family_role', roles: ['family_admin'] } },
   },
+  // Sommel: enabled 2026-10-09. Its tenants.contacts ignores this recipient
+  // spec and picks one contact per live bar itself (owner if still bar_admin,
+  // else the oldest bar_admin; never staff, terminals or archived bars), and
+  // emails.sendFollowup only accepts that contact. The spec below describes
+  // that rule for whoever reads this file; it does not drive it. No `log`:
+  // Sommel has no EmailNotification entity.
+  sommel: {
+    name: 'Sommel', entity: 'WineBar', value: 'las comandas, el cobro y el corte de tu bar en orden',
+    recipient: { related: { entity: 'User', keyField: 'tenant_id', keyFromRecord: 'id', emailField: 'email', roleField: 'app_role', roles: ['bar_admin'] }, nameField: 'name' },
+  },
 }
 
 export function messagingFor(appId) { return APP_MSG[appId] ?? null }
