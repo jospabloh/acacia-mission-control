@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './lib/auth/AuthProvider.jsx'
 import { ThemeProvider } from './lib/theme/ThemeProvider.jsx'
 import ThemeSwitcher from './components/ThemeSwitcher.jsx'
+import UpdateBanner from './components/UpdateBanner.jsx'
 import { LoginGate } from './components/LoginGate.jsx'
 import { Layout } from './components/Layout.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
@@ -48,6 +49,7 @@ export default function App() {
         </LoginGate>
       </AuthProvider>
       <ThemeSwitcher />
+      <UpdateBanner />
     </ThemeProvider>
   )
 }
