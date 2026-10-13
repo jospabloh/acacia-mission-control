@@ -281,15 +281,20 @@ const APPS = {
   // 400), so `payment: null` — there is no payment_reference to stamp, and
   // confirm_payment just advances current_period_end.
   //
-  // `plans: []` and NO `lifecycle` on purpose: the plan names are still an open
-  // decision (docs/estandar-plan.md in the sommel repo, "Nombres de plan y modo
-  // de cobro"). The lifecycle cron only acts on paidPlanValues, so an invented
-  // plan name here would either never match or, worse, start suspending bars
-  // on a name nobody agreed to. Add both once the plan is decided.
+  // `plans: ['start', 'growth', 'pro']` — decided 2026-10-07, same ladder as
+  // KitchOps. Reference prices (informative; Mission Control does not charge
+  // them): $699 / $1,399 / $2,499 MXN/mes.
+  //
+  // Still NO `lifecycle` on purpose: the plan names are settled but the
+  // collection mode ("modo de cobro", docs/estandar-plan.md in the sommel repo)
+  // is not. The lifecycle cron acts on every license whose plan is in
+  // paidPlanValues, so adding one now would start moving real bars to
+  // view_only/suspended and mailing them. Add `lifecycle` (paidPlanValues =
+  // the three plans) only once that is decided.
   sommel: {
     entity: 'WineBar', statusField: 'billing_status', planField: 'plan',
     statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
-    plans: [],
+    plans: ['start', 'growth', 'pro'],
     billing: { expiryField: 'current_period_end', trialField: 'trial_end_at', dateFormat: 'datetime', payment: null, dayConvention: 'preserve_day' },
   },
 }
