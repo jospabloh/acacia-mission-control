@@ -20,6 +20,7 @@ import licenseDeletePremiumData from '../_lib/control/license-delete-premium-dat
 import licenseRecord from '../_lib/control/license-record.js'
 import paymentReport from '../_lib/control/payment-report.js'
 import paymentConfirm from '../_lib/control/payment-confirm.js'
+import testimonialReview from '../_lib/control/testimonial-review.js'
 
 const ROUTES = {
   'run-sync': runSync,
@@ -36,6 +37,7 @@ const ROUTES = {
   'license-record': licenseRecord,
   'payment-report': paymentReport,
   'payment-confirm': paymentConfirm,
+  'testimonial-review': testimonialReview,
 }
 
 export default async function handler(req, res) {

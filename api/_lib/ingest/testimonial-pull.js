@@ -1,0 +1,75 @@
+// Real-time testimonial PULL (contract §2). Same trust model as ticket-pull.js:
+// the app's browser pings with {app, testimonialId} and NOTHING else in the
+// body is trusted — Mission Control reads the authoritative record over the
+// signed acaciaControl bridge (`testimonials.get`), so a forged ping can't
+// publish anything. CORS-open, no secret, because it's a browser target.
+//
+// The response discloses nothing about the id: `{ ok: true }` / 200 for every
+// well-formed request about an unknown app/id or an app without the module;
+// 503 `{ ok: false }` only for a transient failure of ours (so the sender can
+// retry); 400 for a malformed body. The outcome goes to the log.
+import { supabaseAdmin } from '../supabaseAdmin.js'
+import { callBridge, bridgeConfigured } from '../appBridge.js'
+import { processIncomingTestimonial, processMissingTestimonial } from '../ingestTestimonial.js'
+import { isUnknownAction } from '../testimonials.js'
+
+const ID_RE = /^[A-Za-z0-9_-]{6,64}$/
+
+const defaults = {
+  getApp: async (id) => {
+    const { data, error } = await supabaseAdmin.from('apps').select('*').eq('id', id).maybeSingle()
+    if (error) throw new Error(error.message)
+    return data
+  },
+  bridgeConfigured,
+  callBridge,
+  processIncoming: processIncomingTestimonial,
+  processMissing: processMissingTestimonial,
+  log: (msg) => console.log(`[testimonial-pull] ${msg}`),
+}
+
+// Pure-ish core: returns { status, json, outcome }. `deps` is injectable for tests.
+export async function runPing(body, deps = {}) {
+  const d = { ...defaults, ...deps }
+  const { app: appId, testimonialId } = body ?? {}
+  if (typeof appId !== 'string' || !appId || !ID_RE.test(String(testimonialId ?? ''))) {
+    return { status: 400, json: { error: 'falta app/testimonialId' }, outcome: 'malformed' }
+  }
+  const done = (outcome) => { d.log(`app=${appId} id=${testimonialId} ${outcome}`); return { status: 200, json: { ok: true }, outcome } }
+  // A TRANSIENT failure on our side (bridge down or bad answer, DB error, bridge
+  // not configured) answers 503 `{ok:false}` so the app's server-side sender
+  // retries; it names no id and no detail. Everything about the request itself
+  // (unknown app/id, app without the module) stays 200 {ok:true}.
+  const retry = (outcome) => { d.log(`app=${appId} id=${testimonialId} ${outcome}`); return { status: 503, json: { ok: false }, outcome } }
+  try {
+    if (!d.bridgeConfigured()) return retry('bridge no configurado')
+    const app = await d.getApp(appId)
+    if (!app || app.backend !== 'base44') return done('app desconocida')
+
+    const startedAt = new Date().toISOString()
+    let out
+    try {
+      out = await d.callBridge(app, 'testimonials.get', { id: String(testimonialId) })
+    } catch (e) {
+      return isUnknownAction(e) ? done('app sin módulo') : retry(`bridge: ${e.message}`)
+    }
+    const res = out?.data ?? out
+    if (res?.ok !== true || res.record === undefined) return retry('respuesta del puente inválida')
+    if (res.record === null) return done(`ausente en la app: ${(await d.processMissing({ app, externalId: testimonialId, observedAt: startedAt })).reason}`)
+
+    const r = await d.processIncoming({ app, record: res.record, observedAt: startedAt })
+    return done(`${r.reason}${r.notified ? ' (avisado)' : ''}`)
+  } catch (e) {
+    return retry(`error: ${e.message}`)
+  }
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Headers', 'content-type')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  if (req.method === 'OPTIONS') return res.status(204).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
+  const { status, json } = await runPing(req.body)
+  return res.status(status).json(json)
+}
