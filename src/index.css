@@ -29,6 +29,7 @@
   --brand: 59 110 248;          /* the "ac" monogram blue */
   --brand-bright: 91 134 255;
   --brand-deep: 43 86 212;      /* emphatic: darker than brand on a light page */
+  --brand-foreground: 255 255 255; /* label on a brand fill; same in both themes, like --brand */
 
   --acacia-50: 244 246 248;
   --acacia-100: 231 235 240;
@@ -129,4 +130,14 @@ body {
 :root {
   --theme-switcher-bottom: 1rem;
   --theme-switcher-right: 1rem;
+}
+
+/* New-version notice (src/components/UpdateBanner.jsx, Module 30) — placement
+   only. Below `lg` the sidebar is a drawer and the sticky header (Layout.jsx,
+   `h-14` = 3.5rem) carries the "Abrir menú" button at its left edge; on a phone
+   the card spans the width and would sit right on it. 4rem puts it just under
+   the header's bottom border. From `lg` up the card is centred over the main
+   column's header, where there is only the page title and no control. */
+@media (max-width: 1023px) {
+  :root { --update-banner-top: 4rem; }
 }

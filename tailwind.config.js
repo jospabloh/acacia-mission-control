@@ -48,6 +48,10 @@ export default {
         card: 'rgb(var(--paper-card) / <alpha-value>)',
         border: 'var(--hair)',
         primary: 'rgb(var(--brand) / <alpha-value>)',
+        // Label colour on a `bg-primary` fill. The shared <UpdateBanner /> (Module 30)
+        // draws its *Actualizar* button with it; without the alias Tailwind drops
+        // the class and the label inherits ink — dark text on brand blue.
+        'primary-foreground': 'rgb(var(--brand-foreground) / <alpha-value>)',
         ring: 'rgb(var(--brand) / <alpha-value>)',
         'muted-foreground': 'rgb(var(--ink) / 0.55)',
       },
