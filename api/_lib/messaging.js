@@ -67,6 +67,13 @@ export const APP_MSG = {
     name: 'Sommel', entity: 'WineBar', value: 'las comandas, el cobro y el corte de tu bar en orden',
     recipient: { related: { entity: 'User', keyField: 'tenant_id', keyFromRecord: 'id', emailField: 'email', roleField: 'app_role', roles: ['bar_admin'] }, nameField: 'name' },
   },
+  // Umbral: registered 2026-10-14. Condominium entity; condo_admin Users point
+  // back at it via User.condominium_id (top-level field). No `log`: no
+  // EmailNotification entity.
+  umbral: {
+    name: 'Umbral', entity: 'Condominium', value: 'el acceso, las cuotas y la comunicación de tu condominio en orden',
+    recipient: { related: { entity: 'User', keyField: 'condominium_id', keyFromRecord: 'id', emailField: 'email', roleField: 'role', roles: ['condo_admin'] }, nameField: 'name' },
+  },
 }
 
 export function messagingFor(appId) { return APP_MSG[appId] ?? null }

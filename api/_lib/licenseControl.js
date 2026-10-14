@@ -292,6 +292,20 @@ const APPS = {
     plans: [],
     billing: { expiryField: 'current_period_end', trialField: 'trial_end_at', dateFormat: 'datetime', payment: null, dayConvention: 'preserve_day' },
   },
+  // Umbral (jospabloh/umbral) — registered 2026-10-14. Condominium management
+  // (access passes, fees, notices); tenant = Condominium, which carries
+  // billing_status / license_plan / trial_end_at / license_expires_at (the last
+  // two plan fields are new in the app). Same stance as sommel: `payment: null`
+  // (no payment_reference to stamp) and `plans: []` with NO `lifecycle` on
+  // purpose — no plans are defined yet, and the lifecycle cron only acts on
+  // paidPlanValues, so an invented plan name would never match or, worse, start
+  // suspending condominiums on a name nobody agreed to. Add both with the plans.
+  umbral: {
+    entity: 'Condominium', statusField: 'billing_status', planField: 'license_plan',
+    statuses: { active: 'active', suspended: 'suspended', view_only: 'view_only' },
+    plans: [],
+    billing: { expiryField: 'license_expires_at', trialField: 'trial_end_at', dateFormat: 'datetime', payment: null, dayConvention: 'preserve_day' },
+  },
 }
 
 export function licenseControlFor(appId) {
