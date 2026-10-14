@@ -483,3 +483,22 @@ otra cosa que necesite una cadena aleatoria estable se trae la suya.
 **Cómo se supo que el aviso de alta ya funcionaba:** en `alerts`, las altas de StockFlow
 del 30-sep y 1-oct aparecen con `via: ping` y el correo enviado; la de Cesar (29-sep)
 llegó con `via: sync` y sin registro de correo — el ping se había perdido.
+
+## Umbral registrada en código, pendiente de puente + secretos + migración (2026-10-14)
+
+`umbral` (administración de condominios: pases de acceso, cuotas, avisos; app
+Base44 `6ac6b6d5aaf0d858dd14a690`, tenant `Condominium`) está registrada en
+`licenseControl.js` / `licenseCatalog.js`, `ticketControl.js` / `ticketCatalog.js`,
+`messaging.js` y `apps-visits.js`, con `supabase/migrations/0048_seed_umbral.sql`
+**escrita y SIN aplicar**. Como sommel: `plans: []` y sin `lifecycle` hasta que
+existan planes (el cron sólo actúa sobre `paidPlanValues`); `payment: null`; tickets
+con `thread: null` (un solo `message`, `tickets.update` sólo cambia `status`, así
+que no hay respuesta desde el panel). Sin `usage.byTenant`, `emails.status` ni
+bloques audit/mirror.
+
+Orden obligatorio antes de aplicar la 0048: (1) `acaciaControl` de Umbral
+desplegado; (2) `INGEST_HMAC_SECRET` y `ACACIA_APP_SLUG=umbral` puestos en la app
+y **leídos de vuelta** (módulo 16); (3) aplicar la migración; (4) "Sincronizar
+ahora" y comprobar `app_health` ok para `umbral` y una fila `control:run-sync` en
+`audit_actions`, y que el log no traiga `rejected the derived key` para `umbral`.
+`url` queda en `null` hasta probar el dominio (migración aparte).

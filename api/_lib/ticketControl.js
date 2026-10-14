@@ -173,6 +173,21 @@ const APPS = {
       includeOriginal: true, notifyCustomerReplies: true,
     },
   },
+  // Umbral: registered 2026-10-14. SupportTicket has a single `message`, no
+  // thread entity and no inline responses[] — same shape as artiskids, so
+  // `thread: null` and buildTicketReply refuses to reply. Its bridge's
+  // tickets.update changes `status` only (no last_activity_at, hence no
+  // activityField). Two statuses: submitted | resolved, so "in progress"
+  // collapses onto the opening state.
+  umbral: {
+    entity: 'SupportTicket', tenantField: 'condominium_id',
+    subjectField: 'subject', statusField: 'status', priorityField: null,
+    requester: { nameField: 'created_by_email', emailField: 'created_by_email' },
+    statuses: ['submitted', 'resolved'],
+    openStatus: 'submitted', inProgressStatus: 'submitted',
+    resolvedField: null, closedField: null,
+    thread: null,
+  },
   rumbo: {
     entity: 'SupportTicket', tenantField: 'tenant_id',
     subjectField: 'subject', statusField: 'status', priorityField: 'priority',
@@ -197,7 +212,7 @@ export function ticketApps() {
   return Object.keys(APPS)
 }
 
-// For an app with `thread: null` (artiskids, sommel) the conversation is just
+// For an app with `thread: null` (artiskids, sommel, umbral) the conversation is just
 // the customer's original message on the ticket itself. Returned in the same
 // normalized shape as normalizeMessage so the panel renders it like any thread.
 export function originalMessageThread(raw) {
