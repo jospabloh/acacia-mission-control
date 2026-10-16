@@ -31,7 +31,8 @@ src/                 client app (Vite). Only ever uses the Supabase ANON key.
                        from one file)
   lib/appRegistry.js   reads public.apps
   lib/nav.js           pillar nav (role-gated)
-  components/          LoginGate (auth + member gate), Layout, Nav, PageHeader
+  components/          LoginGate (auth + member gate), Layout (wires AppShell),
+                       AppShell + PageHeader (módulo 29, copias exactas), cards
   pages/               Dashboard (live) + one stub per pillar + AppDetail
 api/_lib/             SERVER ONLY — service_role key, adapters. Never import from src/.
   supabaseAdmin.js     service-role client + audit() helper
@@ -483,3 +484,55 @@ otra cosa que necesite una cadena aleatoria estable se trae la suya.
 **Cómo se supo que el aviso de alta ya funcionaba:** en `alerts`, las altas de StockFlow
 del 30-sep y 1-oct aparecen con `via: ping` y el correo enviado; la de Cesar (29-sep)
 llegó con `via: sync` y sin registro de correo — el ping se había perdido.
+
+## Módulo 29 — el marco de la app (app shell) (2026-10-16)
+
+MC es la implementación de referencia del módulo 29 de `jospabloh/acacia-app-standard`
+(§29 de `STANDARD.md`, `shared/shell/`, PR #36 de ese repo, mergeada el 2026-10-13).
+
+- **`src/components/AppShell.jsx` y `src/components/PageHeader.jsx` son copias byte a
+  byte** de `shared/shell/` (se comprobó con `diff`). No se editan aquí: se cambian en el
+  estándar y se vuelven a copiar, igual que `ThemeSwitcher.jsx`.
+- **`Layout.jsx` es la única superficie propia**: pasa los pilares de `src/lib/nav.js`
+  filtrados con `roleAtLeast`, el correo y el rol de `useAuth()` (el rol sale de
+  `members`), `producción` como contexto y `signOut`. Envuelve cada icono por nombre de
+  `icons.jsx` en un componente creado una sola vez a nivel de módulo, porque el shell
+  pinta `item.icon` como componente y un tipo nuevo en cada render remontaría el `<nav>`.
+- **El sidebar ya no lista las apps del registro.** Antes `Nav.jsx` añadía ~34 enlaces por
+  app en tres grupos con un punto de estado; el shell recibe una sola lista plana con
+  icono obligatorio. Decisión del 2026-10-16: fuera del sidebar. A cada app se entra desde
+  el Dashboard, y `AppDetail` lleva el breadcrumb *Portafolio › app* en lugar del botón
+  «Volver al portafolio». `Nav.jsx` se borró.
+- **Sin «Enviar sugerencia».** MC es quien *recibe* los tickets del módulo 8, no quien los
+  manda. Decisión del 2026-10-16: no se pasa `feedback`, y el pie del sidebar queda solo
+  con «Contraer menú».
+- **El avatar no lleva Cuenta ni Acerca de**, porque MC no tiene esas rutas; solo
+  «Cerrar sesión». El otro «Cerrar sesión» que queda está en `LoginGate`, en la pantalla de
+  «no eres operador», que no tiene shell: es la única salida de quien no es miembro.
+- **`PageHeader` cambió de forma:** exportación por defecto con `description` (antes
+  `subtitle`) y `actions` (antes children). `StatCard` y `EmptyState` se mudaron a
+  `src/components/cards.jsx`. Ninguna página tiene más de una acción, y ninguna es un botón
+  primario relleno.
+- **Tokens:** el shell necesitaba `accent`, `popover` y `popover-foreground`, que faltaban.
+  Se declararon en `tailwind.config.js` como alias de variables existentes
+  (`--paper-subtle`, `--paper-card`, `--ink`), así que siguen el tema solos.
+- El drawer pasa de `lg` (1024) a `md` (768), como en el estándar: a 834 ya se ve el
+  sidebar.
+
+**Verificado** (Chromium/Playwright, claro y oscuro, a 390, 834 y 1440): el login con el
+build de producción, sin errores de página ni scroll horizontal. El shell se probó en un
+arnés temporal (no commiteado) con una sesión simulada: el drawer es un `<dialog>` modal a
+390; «Contraer menú» deja un riel de 64px que sobrevive al reload (`acacia-shell-collapsed`
+= `1`); un `viewer` ve solo sus 6 pilares; hay exactamente un «Cerrar sesión»; nada del
+shell se solapa con el selector de tema; no hay scroll horizontal. `lint`, `build` y los
+tests pasan.
+
+**No verificado:** las pantallas autenticadas reales (Dashboard, Licencias, Soporte…)
+dentro del shell, con datos de Supabase; sin sesión no se alcanzan en este entorno. El
+arnés usó una página falsa con el `PageHeader` y las `StatCard` reales, no las páginas
+reales. Tampoco se probó con lector de pantalla.
+
+**Defecto del shell compartido, sin arreglar aquí:** con `accountItems` vacío, el menú del
+avatar pinta dos separadores seguidos antes de «Cerrar sesión». MC es la primera app sin
+Cuenta ni Acerca de, así que es la primera que lo muestra. El arreglo va en
+`shared/shell/AppShell.jsx` del estándar, y luego se vuelve a copiar.

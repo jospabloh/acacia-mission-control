@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { EmptyState } from '../components/cards.jsx'
 
 // Every write Mission Control performs calls audit() into public.audit_actions.
 // This is the read-only trail of those operations — who did what, to which app,
@@ -59,9 +60,11 @@ export function WriteControl() {
 
   return (
     <div>
-      <PageHeader title="Control de escritura" subtitle="Auditoría de toda operación que Mission Control ejecuta sobre las apps — quién, qué, cuándo.">
+      <PageHeader title="Control de escritura" description="Auditoría de toda operación que Mission Control ejecuta sobre las apps — quién, qué, cuándo."
+        actions={<>
         <button onClick={load} className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle">Actualizar</button>
-      </PageHeader>
+        </>}
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <label className="flex items-center gap-2 text-ink-soft">

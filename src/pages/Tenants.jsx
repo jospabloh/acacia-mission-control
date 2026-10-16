@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { EmptyState } from '../components/cards.jsx'
 
 const STATUS_STYLE = {
   active: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
@@ -26,7 +27,7 @@ export function Tenants() {
 
   return (
     <div>
-      <PageHeader title="Tenants" subtitle="Clientes sincronizados de todas las apps del portafolio." />
+      <PageHeader breadcrumbs={[{ label: 'Portafolio', to: '/' }, { label: 'Tenants' }]} title="Tenants" description="Clientes sincronizados de todas las apps del portafolio." />
 
       {rows === null ? (
         <p className="text-sm text-ink-mute">Cargando…</p>

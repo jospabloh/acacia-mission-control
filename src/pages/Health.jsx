@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { runSync } from '../lib/control.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { EmptyState } from '../components/cards.jsx'
 
 const TONE = {
   ok: { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300', label: 'Operativo' },
@@ -85,13 +86,15 @@ export function Health() {
 
   return (
     <div>
-      <PageHeader title="Salud" subtitle="Disponibilidad y latencia por app. Sondea el puente (Base44) o la URL (sitios).">
+      <PageHeader title="Salud" description="Disponibilidad y latencia por app. Sondea el puente (Base44) o la URL (sitios)."
+        actions={<>
         <button onClick={probeAll} disabled={busy || !apps?.length}
           className="inline-flex items-center gap-2 rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-60">
           {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-faint border-t-transparent" />}
           {busy ? `Probando ${progress.done}/${progress.total}…` : 'Probar ahora'}
         </button>
-      </PageHeader>
+        </>}
+      />
 
       {busy && (
         <div className="mb-4">

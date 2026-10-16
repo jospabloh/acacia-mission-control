@@ -4,7 +4,8 @@ import { licenseAction, deletePremiumData, licenseSetDates, licenseCancel, licen
 import { capabilitiesFor, lifecyclePosition, LIFECYCLE_STAGES } from '../lib/licenseCatalog.js'
 import { useAuth, roleAtLeast } from '../lib/auth/useAuth.js'
 import { useToasts } from '../lib/useToasts.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { EmptyState } from '../components/cards.jsx'
 import {
   Button, Badge, SearchInput, FilterChips, Field, TextInput, Select, Toggle,
   ActionMenu, Modal, Callout, ToastStack,
@@ -540,10 +541,12 @@ export function Licenses() {
     <div>
       <PageHeader
         title="Licencias"
-        subtitle="Todo el ciclo de una licencia, por tenant: pagos, estado, fechas y bajas. Cada cambio se escribe en la app correspondiente."
-      >
+        description="Todo el ciclo de una licencia, por tenant: pagos, estado, fechas y bajas. Cada cambio se escribe en la app correspondiente."
+      
+        actions={<>
         <Button variant="secondary" onClick={load} disabled={loading}>{loading ? 'Actualizando…' : 'Actualizar'}</Button>
-      </PageHeader>
+        </>}
+      />
 
       {rows === null ? (
         <div className="space-y-2">

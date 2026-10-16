@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
 import { webKpis, usageByTenant } from '../lib/control.js'
-import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { StatCard } from '../components/cards.jsx'
 
 const STATUS_LABEL = { active: 'Activas', trial: 'En prueba', view_only: 'Solo lectura', past_due: 'Vencidas', canceled: 'Canceladas', desconocido: 'Sin estado' }
 const STATUS_BAR = { active: 'bg-emerald-500', trial: 'bg-brand', view_only: 'bg-amber-400', past_due: 'bg-red-400', canceled: 'bg-ink-faint', desconocido: 'bg-ink-faint' }
@@ -152,7 +153,7 @@ export function Analytics() {
   const t = data.totals
   return (
     <div>
-      <PageHeader title="Analítica" subtitle="Uso, consumo y tráfico del portafolio — tendencias en vivo." />
+      <PageHeader title="Analítica" description="Uso, consumo y tráfico del portafolio — tendencias en vivo." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Licencias" value={t.licenses} hint={`${t.tenants} tenants`} />

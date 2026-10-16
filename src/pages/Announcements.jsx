@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { listContacts, sendMessage } from '../lib/control.js'
-import { PageHeader } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 const MSG_APPS = [
   { id: 'flowfin', name: 'FlowFin' }, { id: 'stockflow', name: 'StockFlow' },
@@ -54,7 +54,7 @@ export function Announcements() {
 
   return (
     <div>
-      <PageHeader title="Comunicados" subtitle="Mensajes a tus clientes — renovación, campañas y avisos de mantenimiento. Un solo canal, con confirmación." />
+      <PageHeader title="Comunicados" description="Mensajes a tus clientes — renovación, campañas y avisos de mantenimiento. Un solo canal, con confirmación." />
 
       {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 

@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { revokeSessions } from '../lib/control.js'
 import { isRowOpen, isRowOnline, fmtIdle } from '../lib/sessionsView.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { EmptyState } from '../components/cards.jsx'
 
 // Portfolio-wide open sessions (all apps), from the synced bodega copy.
 // Read-only view + a quick "cerrar" for idle sessions; forcing an ACTIVE
@@ -61,7 +62,7 @@ export function Sessions() {
 
   return (
     <div>
-      <PageHeader title="Sesiones activas" subtitle="Sesiones abiertas de todas las apps del portafolio, en vivo." />
+      <PageHeader breadcrumbs={[{ label: 'Portafolio', to: '/' }, { label: 'Sesiones activas' }]} title="Sesiones activas" description="Sesiones abiertas de todas las apps del portafolio, en vivo." />
 
       {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 

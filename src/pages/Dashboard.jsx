@@ -1,4 +1,5 @@
-import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { StatCard } from '../components/cards.jsx'
 import { PortfolioSections } from '../components/PortfolioSections.jsx'
 import { usePortfolioData } from '../lib/usePortfolioData.js'
 import { OpenTicketsPanel } from '../components/OpenTicketsPanel.jsx'
@@ -8,7 +9,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <PageHeader title="Portafolio" subtitle="Control y analíticas de todo lo que opera ACACIA — un clic entra al panel de cada app." />
+      <PageHeader title="Portafolio" description="Control y analíticas de todo lo que opera ACACIA — un clic entra al panel de cada app." />
 
       {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">No se pudo leer el registro: {error}</p>}
 

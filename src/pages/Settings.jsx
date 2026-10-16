@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { PageHeader } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 import { useAuth } from '../lib/auth/useAuth.js'
 import { listMembers, inviteMember, setMemberRole, removeMember } from '../lib/control.js'
 
@@ -72,7 +72,7 @@ export function Settings() {
 
   return (
     <div>
-      <PageHeader title="Ajustes" subtitle="Operadores y roles de Mission Control. Solo el owner gestiona aquí." />
+      <PageHeader title="Ajustes" description="Operadores y roles de Mission Control. Solo el owner gestiona aquí." />
 
       {flash && (
         <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>

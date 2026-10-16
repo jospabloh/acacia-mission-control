@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase.js'
 import { fetchApps } from '../lib/appRegistry.js'
 import { summarizePortfolio } from '../lib/insights.js'
 import { runSync, emailStatus, webKpis } from '../lib/control.js'
-import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { StatCard } from '../components/cards.jsx'
 import { SessionsPanel } from '../components/SessionsPanel.jsx'
 import { Icon } from '../components/icons.jsx'
 
@@ -240,21 +241,17 @@ export function AppDetail() {
 
   return (
     <div>
-      <Link to="/"
-        className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-hair bg-paper-card px-3 py-1.5 text-sm font-medium text-ink-mute hover:border-brand/40 hover:text-brand">
-        <span aria-hidden="true">←</span> Volver al portafolio
-      </Link>
       <PageHeader
+        breadcrumbs={[{ label: 'Portafolio', to: '/' }, { label: app.name }]}
         title={app.name}
-        subtitle={`${BACKEND_LABEL[app.backend] ?? app.backend}${app.external_id ? ` · ${app.external_id}` : ''} · control y analíticas`}
-      >
-        {app.url && (
+        description={`${BACKEND_LABEL[app.backend] ?? app.backend}${app.external_id ? ` · ${app.external_id}` : ''} · control y analíticas`}
+        actions={app.url && (
           <a href={app.url} target="_blank" rel="noreferrer"
             className="inline-flex items-center gap-1 text-sm text-ink-mute hover:text-brand">
             Abrir app <Icon name="external" size={13} />
           </a>
         )}
-      </PageHeader>
+      />
 
       {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">No se pudo leer: {error}</p>}
 
