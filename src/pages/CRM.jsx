@@ -1,7 +1,8 @@
 // src/pages/CRM.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { StatCard } from '../components/cards.jsx'
 import { Badge, FilterChips } from '../components/ui.jsx'
 // `type` distinguishes a Soporte a Apps submission (acaciaco-site) from an
 // ordinary sales lead (`null` — the table's original and only meaning). The
@@ -72,7 +73,7 @@ export function CRM() {
 
   return (
     <div>
-      <PageHeader title="CRM" subtitle="Leads del sitio y seguimiento de pipeline." />
+      <PageHeader title="CRM" description="Leads del sitio y seguimiento de pipeline." />
       {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

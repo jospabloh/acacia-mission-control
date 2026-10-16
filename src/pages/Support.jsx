@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { runSync, ticketThread, ticketAction } from '../lib/control.js'
-import { PageHeader, EmptyState } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { EmptyState } from '../components/cards.jsx'
 import { SlaHeatBar } from '../components/SlaHeatBar.jsx'
 import { TICKET_APPS, TICKET_CATALOG, isOpenTicket } from '../lib/ticketCatalog.js'
 
@@ -179,12 +180,14 @@ export function Support() {
 
   return (
     <div>
-      <PageHeader title="Soporte" subtitle="Bandeja unificada de tickets de todas las apps. Responde y cambia el estado sin entrar a cada una.">
+      <PageHeader title="Soporte" description="Bandeja unificada de tickets de todas las apps. Responde y cambia el estado sin entrar a cada una."
+        actions={<>
         <button onClick={syncAll} disabled={syncing}
           className="rounded-lg border border-hair px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-subtle disabled:opacity-50">
           {syncing ? 'Sincronizando…' : 'Sincronizar'}
         </button>
-      </PageHeader>
+        </>}
+      />
 
       {flash && <p className={`mb-4 text-sm ${flash.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{flash.msg}</p>}
 

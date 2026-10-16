@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { PageHeader, StatCard } from '../components/PageHeader.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import { StatCard } from '../components/cards.jsx'
 
 const money = (cents, cur = 'MXN') =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: cur || 'MXN', maximumFractionDigits: 0 }).format((cents ?? 0) / 100)
@@ -61,7 +62,7 @@ export function Revenue() {
 
   return (
     <div>
-      <PageHeader title="Ingresos" subtitle="Pagos y renovaciones vía Mercado Pago — del webhook a la bodega." />
+      <PageHeader title="Ingresos" description="Pagos y renovaciones vía Mercado Pago — del webhook a la bodega." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Este mes" value={money(sum.month)} accent hint="ingresos del mes en curso" />

@@ -53,6 +53,13 @@ export default {
         // the class and the label inherits ink — dark text on brand blue.
         'primary-foreground': 'rgb(var(--brand-foreground) / <alpha-value>)',
         ring: 'rgb(var(--brand) / <alpha-value>)',
+        // Module 29's shared <AppShell /> also draws with these three: `accent` is
+        // the hover / active-item fill (the nav's old paper-subtle), `popover` the
+        // account menu's surface. Aliases of existing variables, so both themes
+        // come for free.
+        accent: 'rgb(var(--paper-subtle) / <alpha-value>)',
+        popover: 'rgb(var(--paper-card) / <alpha-value>)',
+        'popover-foreground': 'rgb(var(--ink) / <alpha-value>)',
         'muted-foreground': 'rgb(var(--ink) / 0.55)',
       },
       boxShadow: {
